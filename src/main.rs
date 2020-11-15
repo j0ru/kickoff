@@ -28,7 +28,7 @@ fn main() {
   let surface = env.create_surface().detach();
   let mut img: RgbaImage = ImageBuffer::from_pixel(dimensions.0, dimensions.1, Rgba([0,0,0,200]));
 
-  let text_image: RgbaImage = render_text("?", font, Scale::uniform(64.), (255,0,255));
+  let text_image: RgbaImage = render_text("Hello Wayland?", font, Scale::uniform(64.), (255,0,255));
   image::imageops::overlay(&mut img, &text_image, dimensions.0 / 2, dimensions.1 / 2);
 
   let mut next_action = None::<WEvent>;
@@ -53,8 +53,6 @@ fn main() {
 
   window.set_title("WiniLauncher".to_string());
   window.set_resizable(false);
-
-  // window.set_fullscreen
 
   let mut pools = env.create_double_pool(|_| {}).expect("Failed to create the memory pools.");
 
@@ -122,20 +120,21 @@ fn render_text(text: &str, font: rusttype::Font, scale: rusttype::Scale, colour:
       .last()
       .map(|g| g.pixel_bounding_box().unwrap().max.x)
       .unwrap();
-    (max_x - min_x) as u32
+    (max_x - min_x + 4) as u32 //TODO: +4 as safety margin, need to figure out where they're actually comming from
   };
 
   let mut image = RgbaImage::new(glyphs_width, glyphs_height);
   for glyph in glyphs {
-    glyph.draw(|x, y, v| {
-      image.put_pixel(
-        // Offset the position by the glyph bounding box
-        x,
-        y,
-        // Turn the coverage into an alpha value
-        Rgba([colour.0, colour.1, colour.2, (v * 255.0) as u8]),
-      )
-    });
+    if let Some(bounding_box) = glyph.pixel_bounding_box() {
+      glyph.draw(|x, y, v| {
+        println!("{}", x + bounding_box.min.x as u32);
+        image.put_pixel(
+          x + bounding_box.min.x as u32,
+          y + bounding_box.min.y as u32,
+          Rgba([colour.0, colour.1, colour.2, (v * 255.0) as u8]),
+        )
+      });
+    }
   }
   return image;
 }

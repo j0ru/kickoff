@@ -2,23 +2,34 @@ extern crate smithay_client_toolkit as sctk;
 extern crate byteorder;
 extern crate rusttype;
 extern crate image;
+extern crate is_executable;
 
 use sctk::window::{ConceptFrame, Event as WEvent};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use sctk::shm::MemPool;
 use byteorder::{NativeEndian, WriteBytesExt};
-use sctk::reexports::client::protocol::{wl_shm, wl_surface};
+use sctk::reexports::client::protocol::{wl_keyboard, wl_shm, wl_surface};
 use rusttype::{point, Font, Scale};
 use image::{RgbaImage, ImageBuffer, Rgba, Pixel};
+use sctk::reexports::calloop;
+use sctk::seat::keyboard::{map_keyboard_repeat, Event as KbEvent, RepeatKind, KeyState};
+use std::sync::{Arc, Mutex};
+use smithay_client_toolkit::seat::keyboard::keysyms;
+use std::env;
+use std::fs::{self, DirEntry};
+use std::cmp;
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
 
 sctk::default_environment!(Launcher, desktop);
 
 fn main() {
 
-  // Font stuff
-  let font_data = include_bytes!("../Roboto-Regular.ttf");
-  let font = Font::try_from_bytes(font_data as &[u8]).expect("Error constructing Font");
+  let mut executables = get_executables().unwrap();
+  executables.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
   
+  let event_loop = calloop::EventLoop::<Option<WEvent>>::new().unwrap();
+  let mut seats = Vec::<(String, Option<(wl_keyboard::WlKeyboard, calloop::Source<_>)>)>::new();
 
   // Window stuff
   let mut dimensions = (1920, 1080);
@@ -26,10 +37,8 @@ fn main() {
     .expect("Unable to connect to the Wayland server");
 
   let surface = env.create_surface().detach();
-  let mut img: RgbaImage = ImageBuffer::from_pixel(dimensions.0, dimensions.1, Rgba([0,0,0,200]));
+  let base_img: RgbaImage = ImageBuffer::from_pixel(dimensions.0, dimensions.1, Rgba([0,0,0,200]));
 
-  let text_image: RgbaImage = render_text("Hello Wayland?", font, Scale::uniform(64.), (255,0,255));
-  image::imageops::overlay(&mut img, &text_image, dimensions.0 / 2, dimensions.1 / 2);
 
   let mut next_action = None::<WEvent>;
   let mut window = env.create_window::<ConceptFrame, _>(
@@ -51,16 +60,49 @@ fn main() {
     },
   ).expect("Failed to create a window");
 
+  let search_arc = Arc::new(Mutex::new("".to_string()));
+
   window.set_title("WiniLauncher".to_string());
   window.set_resizable(false);
 
   let mut pools = env.create_double_pool(|_| {}).expect("Failed to create the memory pools.");
 
+  // first process already existing seats
+  for seat in env.get_all_seats() {
+    if let Some((has_kbd, name)) = sctk::seat::with_seat_data(&seat, |seat_data| {
+      (seat_data.has_keyboard && !seat_data.defunct, seat_data.name.clone())
+    }) {
+      let search_arc = search_arc.clone();
+      if has_kbd {
+        let seat_name = name.clone();
+        match map_keyboard_repeat(
+          event_loop.handle(),
+          &seat,
+          None,
+          RepeatKind::System,
+          move |event, _, _| process_keyboard_event(event, &seat_name, &search_arc),
+        ) {
+          Ok((kbd, repeat_source)) => {
+            seats.push((name, Some((kbd, repeat_source))));
+          }
+          Err(e) => {
+            eprintln!("Failed to map keyboard on seat {} : {:?}.", name, e);
+            seats.push((name, None));
+          }
+        }
+      } else {
+        seats.push((name, None));
+      }
+    }
+  }
+
+
   let mut need_redraw = false;
+  let mut last_text = (*search_arc.lock().unwrap()).clone();
 
   if !env.get_shell().unwrap().needs_configure() {
     if let Some(pool) = pools.pool() {
-      redraw(pool, window.surface(), dimensions, &img).expect("Failed to draw");
+      redraw(pool, window.surface(), dimensions, &base_img).expect("Failed to draw");
     }
     window.refresh();
   }
@@ -83,13 +125,39 @@ fn main() {
 
         need_redraw = true;
       },
-      None => {}
+      None => {},
+    }
+    
+    if last_text != (*search_arc.lock().unwrap()).clone() {
+      last_text = (*search_arc.lock().unwrap()).clone();
+      need_redraw = true;
     }
 
     if need_redraw { // in the future determine if redraw needed
+
+      // TODO: define elsewhere
+      let font_data = include_bytes!("../Roboto-Regular.ttf");
+      let font = Font::try_from_bytes(font_data as &[u8]).expect("Error constructing Font");
+      
       match pools.pool() {
         Some(pool) => {
           need_redraw = false;
+
+          // TODO: move to own function
+          let mut img = base_img.clone();
+          let search = (*search_arc.lock().unwrap()).clone();
+          if !search.is_empty() {
+            let text_image: RgbaImage = render_text(&search, &font, Scale::uniform(64.), (152,195,121));
+            image::imageops::overlay(&mut img, &text_image, 10, 10);
+          }
+
+          let executables = fuzzy_sort(&executables, &search);
+          for i in 0..(cmp::min(10, executables.len())) {
+            let text_image: RgbaImage = render_text(&executables[i].file_name().to_str().unwrap(), &font, Scale::uniform(64.), (97,175,239));
+            image::imageops::overlay(&mut img, &text_image, 10, (100 + i * text_image.height() as usize) as u32);
+
+          }
+
           redraw(
             pool,
             window.surface(),
@@ -105,39 +173,62 @@ fn main() {
 
 }
 
-fn render_text(text: &str, font: rusttype::Font, scale: rusttype::Scale, colour: (u8, u8, u8)) -> RgbaImage {
+fn render_text(text: &str, font: &rusttype::Font, scale: rusttype::Scale, colour: (u8, u8, u8)) -> RgbaImage {
   // Font stuff
   let v_metrics = font.v_metrics(scale);
 
   let glyphs: Vec<_> = font.layout(text, scale, point(0.0, v_metrics.ascent)).collect();
   let glyphs_height = (v_metrics.ascent - v_metrics.descent).ceil() as u32;
-  let glyphs_width = {
-    let min_x = glyphs
-      .first()
-      .map(|g| g.pixel_bounding_box().unwrap().min.x)
-      .unwrap();
-    let max_x = glyphs
-      .last()
-      .map(|g| g.pixel_bounding_box().unwrap().max.x)
-      .unwrap();
-    (max_x - min_x + 4) as u32 //TODO: +4 as safety margin, need to figure out where they're actually comming from
-  };
+  let glyphs_width = glyphs
+        .iter()
+        .rev()
+        .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
+        .next()
+        .unwrap_or(0.0)
+        .ceil() as u32;
 
   let mut image = RgbaImage::new(glyphs_width, glyphs_height);
   for glyph in glyphs {
     if let Some(bounding_box) = glyph.pixel_bounding_box() {
       glyph.draw(|x, y, v| {
-        println!("{}", x + bounding_box.min.x as u32);
-        image.put_pixel(
-          x + bounding_box.min.x as u32,
-          y + bounding_box.min.y as u32,
-          Rgba([colour.0, colour.1, colour.2, (v * 255.0) as u8]),
-        )
+        let x = x + bounding_box.min.x as u32;
+        let y = y + bounding_box.min.y as u32;
+        if x < glyphs_width && y < glyphs_height {
+          image.put_pixel(
+            x,
+            y,
+            Rgba([colour.0, colour.1, colour.2, (v * 255.0) as u8]),
+          )
+        }
       });
     }
   }
   return image;
 }
+
+fn get_executables() -> Option<Vec<DirEntry>> {
+  let var = match env::var_os("PATH") {
+    Some(var) => var,
+    None => return None,
+  };
+
+  let mut res: Vec<DirEntry> = Vec::new();
+
+  let paths_iter = env::split_paths(&var);
+  let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
+
+  for dir in dirs_iter {
+    let executables_iter = dir.filter_map(|file| file.ok())
+        .filter(|file| is_executable::is_executable(file.path()))
+        .filter(|file| !file.path().is_dir());
+    
+    for exe in executables_iter {
+      res.push(exe);
+    }
+  }
+
+  Some(res)
+} 
 
 fn redraw(
   pool: &mut MemPool,
@@ -145,7 +236,6 @@ fn redraw(
   (buf_x, buf_y): (u32, u32),
   image: &RgbaImage,
 ) -> Result<(), ::std::io::Error> {
-  println!("x: {}, y: {}", buf_x, buf_y);
   pool.resize((4 * buf_x * buf_y) as usize).expect("Failed to resize the memory pool.");
   pool.seek(SeekFrom::Start(0))?;
   {
@@ -167,4 +257,49 @@ fn redraw(
   }
   surface.commit();
   Ok(())
+}
+
+fn fuzzy_sort<'a>(executables: &'a Vec<DirEntry>, pattern: &str) -> Vec<&'a DirEntry> {
+  let matcher = SkimMatcherV2::default();
+  let mut executables = executables.into_iter().map(|x| (matcher.fuzzy_match(&x.file_name().into_string().ok().unwrap().to_lowercase() , pattern), x)).collect::<Vec<(Option<i64>, &DirEntry)>>();
+  executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
+  executables.into_iter().filter(|x| x.0.is_some()).into_iter().map(|x| x.1).collect()
+}
+
+fn process_keyboard_event(event: KbEvent, seat_name: &str, search_arc: &Arc<Mutex<String>>) {
+  let mut search = search_arc.lock().unwrap();
+    match event {
+        KbEvent::Enter { keysyms, .. } => {
+            println!("Gained focus on seat '{}' while {} keys pressed.", seat_name, keysyms.len(),);
+        }
+        KbEvent::Leave { .. } => {
+            println!("Lost focus on seat '{}'.", seat_name);
+        }
+        KbEvent::Key { keysym, state, utf8, .. } => {
+            println!("Key {:?}: {:x} on seat '{}'.", state, keysym, seat_name);
+            match (state, keysym) {
+              (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
+                  (*search).pop();
+                  println!(" -> Backspace received");
+                  println!(" -> Text is now \"{}\".", (*search).to_string());
+              }
+              _ => {
+                if let Some(txt) = utf8 {
+                  (*search).push_str(&txt);
+                  println!(" -> Received text \"{}\".", txt);
+                  println!(" -> Text is now \"{}\".", (*search).to_string());
+                }
+              }
+            }
+        }
+        KbEvent::Modifiers { modifiers } => {
+            println!("Modifiers changed to {:?} on seat '{}'.", modifiers, seat_name);
+        }
+        KbEvent::Repeat { keysym, utf8, .. } => {
+            println!("Key repetition {:x} on seat '{}'.", keysym, seat_name);
+            if let Some(txt) = utf8 {
+                println!(" -> Received text \"{}\".", txt);
+            }
+        }
+    }
 }

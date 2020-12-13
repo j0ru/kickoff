@@ -29,6 +29,7 @@ enum Action {
   Execute,
   Exit,
   Search,
+  Complete,
 }
 
 type DData<'a> = (Option<WEvent>, String, Option<Action>);
@@ -146,6 +147,14 @@ fn main() {
           matched_exe = fuzzy_sort(&executables, query);
         },
         Action::Exit => break,
+        Action::Complete => {
+          if let Some(path) = matched_exe.get(0) {
+            query.clear();
+            query.push_str(path.file_name().to_str().unwrap());
+            matched_exe = fuzzy_sort(&executables, query);
+            need_redraw = true;
+          }
+        },
         Action::Execute => {
           println!("executing {:?}", matched_exe[0].path());
           if let Some(path) = matched_exe.get(0) {
@@ -311,6 +320,9 @@ fn process_keyboard_event(event: KbEvent, seat_name: &str, mut data: DispatchDat
                 println!(" -> Backspace received");
                 println!(" -> Text is now \"{}\".", search.to_string());
                 *action = Some(Action::Search);
+              },
+              (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
+                *action = Some(Action::Complete);
               },
               (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
                 *action = Some(Action::Execute);

@@ -9,11 +9,11 @@ use std::io::{BufWriter, Seek, SeekFrom, Write};
 use sctk::shm::MemPool;
 use byteorder::{NativeEndian, WriteBytesExt};
 use sctk::reexports::client::protocol::{wl_keyboard, wl_shm, wl_surface};
+use sctk::reexports::client::DispatchData;
 use rusttype::{point, Font, Scale};
 use image::{RgbaImage, ImageBuffer, Rgba, Pixel};
 use sctk::reexports::calloop;
 use sctk::seat::keyboard::{map_keyboard_repeat, Event as KbEvent, RepeatKind, KeyState};
-use std::sync::{Arc, Mutex};
 use smithay_client_toolkit::seat::keyboard::keysyms;
 use std::env;
 use std::fs::{self, DirEntry};
@@ -23,30 +23,38 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 
 sctk::default_environment!(Launcher, desktop);
 
+enum Action {
+  Execute,
+  Exit,
+  Search,
+}
+
+type DData = (Option<WEvent>, String, Option<Action>);
+
 fn main() {
 
   let mut executables = get_executables().unwrap();
   executables.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
   
-  let event_loop = calloop::EventLoop::<Option<WEvent>>::new().unwrap();
+  let mut event_loop = calloop::EventLoop::<DData>::new().unwrap();
+
   let mut seats = Vec::<(String, Option<(wl_keyboard::WlKeyboard, calloop::Source<_>)>)>::new();
 
   // Window stuff
   let mut dimensions = (1920, 1080);
-  let (env, _display, mut queue) = sctk::new_default_environment!(Launcher, desktop)
+  let (env, display, queue) = sctk::new_default_environment!(Launcher, desktop)
     .expect("Unable to connect to the Wayland server");
 
   let surface = env.create_surface().detach();
   let base_img: RgbaImage = ImageBuffer::from_pixel(dimensions.0, dimensions.1, Rgba([0,0,0,200]));
 
 
-  let mut next_action = None::<WEvent>;
   let mut window = env.create_window::<ConceptFrame, _>(
     surface,
     None,
     (1920,1080),
     move |evt, mut dispatch_data| {
-      let next_action = dispatch_data.get::<Option<WEvent>>().unwrap();
+      let (next_action, _, _) = dispatch_data.get::<DData>().unwrap();
       let replace = match (&evt, &*next_action) {
         (_, &None)
         | (_, &Some(WEvent::Refresh))
@@ -60,8 +68,6 @@ fn main() {
     },
   ).expect("Failed to create a window");
 
-  let search_arc = Arc::new(Mutex::new("".to_string()));
-
   window.set_title("WiniLauncher".to_string());
   window.set_resizable(false);
 
@@ -72,7 +78,6 @@ fn main() {
     if let Some((has_kbd, name)) = sctk::seat::with_seat_data(&seat, |seat_data| {
       (seat_data.has_keyboard && !seat_data.defunct, seat_data.name.clone())
     }) {
-      let search_arc = search_arc.clone();
       if has_kbd {
         let seat_name = name.clone();
         match map_keyboard_repeat(
@@ -80,7 +85,7 @@ fn main() {
           &seat,
           None,
           RepeatKind::System,
-          move |event, _, _| process_keyboard_event(event, &seat_name, &search_arc),
+          move |event, _, ddata| process_keyboard_event(event, &seat_name, ddata),
         ) {
           Ok((kbd, repeat_source)) => {
             seats.push((name, Some((kbd, repeat_source))));
@@ -98,7 +103,6 @@ fn main() {
 
 
   let mut need_redraw = false;
-  let mut last_text = (*search_arc.lock().unwrap()).clone();
 
   if !env.get_shell().unwrap().needs_configure() {
     if let Some(pool) = pools.pool() {
@@ -107,8 +111,11 @@ fn main() {
     window.refresh();
   }
 
+  let mut data: DData = (None, "".to_string(), None);
+  sctk::WaylandSource::new(queue).quick_insert(event_loop.handle()).unwrap();
+
   loop {
-    match next_action.take() {
+    match data.0.take() {
       Some(WEvent::Close) => break,
       Some(WEvent::Refresh) => {
         window.refresh();
@@ -127,13 +134,16 @@ fn main() {
       },
       None => {},
     }
-    
-    if last_text != (*search_arc.lock().unwrap()).clone() {
-      last_text = (*search_arc.lock().unwrap()).clone();
-      need_redraw = true;
+
+    if let Some(action) = data.2.take() {
+      match action {
+        Action::Search => need_redraw = true,
+        Action::Exit => break,
+        Action::Execute => break, // TODO: Implement ;)
+      }
     }
 
-    if need_redraw { // in the future determine if redraw needed
+    if need_redraw {
 
       // TODO: define elsewhere
       let font_data = include_bytes!("../Roboto-Regular.ttf");
@@ -143,9 +153,9 @@ fn main() {
         Some(pool) => {
           need_redraw = false;
 
-          // TODO: move to own function
+          // TODO: move this mess to it's own function
           let mut img = base_img.clone();
-          let search = (*search_arc.lock().unwrap()).clone();
+          let search = &data.1;
           if !search.is_empty() {
             let text_image: RgbaImage = render_text(&search, &font, Scale::uniform(64.), (152,195,121));
             image::imageops::overlay(&mut img, &text_image, 10, 10);
@@ -168,13 +178,13 @@ fn main() {
       }
     }
 
-    queue.dispatch(&mut next_action, |_, _, _| {}).unwrap();
+    display.flush().unwrap();
+    event_loop.dispatch(None, &mut data).unwrap();
   }
 
 }
 
 fn render_text(text: &str, font: &rusttype::Font, scale: rusttype::Scale, colour: (u8, u8, u8)) -> RgbaImage {
-  // Font stuff
   let v_metrics = font.v_metrics(scale);
 
   let glyphs: Vec<_> = font.layout(text, scale, point(0.0, v_metrics.ascent)).collect();
@@ -266,8 +276,9 @@ fn fuzzy_sort<'a>(executables: &'a Vec<DirEntry>, pattern: &str) -> Vec<&'a DirE
   executables.into_iter().filter(|x| x.0.is_some()).into_iter().map(|x| x.1).collect()
 }
 
-fn process_keyboard_event(event: KbEvent, seat_name: &str, search_arc: &Arc<Mutex<String>>) {
-  let mut search = search_arc.lock().unwrap();
+fn process_keyboard_event(event: KbEvent, seat_name: &str, mut data: DispatchData) {
+
+  let (_, search, action) = data.get::<DData>().unwrap();
     match event {
         KbEvent::Enter { keysyms, .. } => {
             println!("Gained focus on seat '{}' while {} keys pressed.", seat_name, keysyms.len(),);
@@ -279,22 +290,28 @@ fn process_keyboard_event(event: KbEvent, seat_name: &str, search_arc: &Arc<Mute
             println!("Key {:?}: {:x} on seat '{}'.", state, keysym, seat_name);
             match (state, keysym) {
               (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
-                  (*search).pop();
-                  println!(" -> Backspace received");
-                  println!(" -> Text is now \"{}\".", (*search).to_string());
-              }
+                search.pop();
+                println!(" -> Backspace received");
+                println!(" -> Text is now \"{}\".", search.to_string());
+                *action = Some(Action::Search);
+              },
+              (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
+                *action = Some(Action::Execute);
+              },
+              (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
+                *action = Some(Action::Exit);
+              },
               _ => {
                 if let Some(txt) = utf8 {
-                  (*search).push_str(&txt);
+                  search.push_str(&txt);
                   println!(" -> Received text \"{}\".", txt);
-                  println!(" -> Text is now \"{}\".", (*search).to_string());
+                  println!(" -> Text is now \"{}\".", search.to_string());
+                  *action = Some(Action::Search);
                 }
               }
             }
         }
-        KbEvent::Modifiers { modifiers } => {
-            println!("Modifiers changed to {:?} on seat '{}'.", modifiers, seat_name);
-        }
+        KbEvent::Modifiers { .. } => {}
         KbEvent::Repeat { keysym, utf8, .. } => {
             println!("Key repetition {:x} on seat '{}'.", keysym, seat_name);
             if let Some(txt) = utf8 {

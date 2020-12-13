@@ -62,7 +62,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b036167e76041694579972c28cf4877b4f92da222560ddb49008937b6a6727c"
 dependencies = [
  "log",
- "nix",
+ "nix 0.18.0",
 ]
 
 [[package]]
@@ -336,6 +336,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2ccba0cfe4fdf15982d1674c69b1fd80bad427d293849982668dfe454bd61f2"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
+]
+
+[[package]]
 name = "nom"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -523,7 +535,7 @@ dependencies = [
  "lazy_static",
  "log",
  "memmap",
- "nix",
+ "nix 0.18.0",
  "wayland-client",
  "wayland-cursor",
  "wayland-protocols",
@@ -587,7 +599,7 @@ dependencies = [
  "bitflags",
  "downcast-rs",
  "libc",
- "nix",
+ "nix 0.18.0",
  "wayland-commons",
  "wayland-scanner",
  "wayland-sys",
@@ -599,7 +611,7 @@ version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230b3ffeda101f877ff8ecb8573f5d26e7beb345b197807c4df34ec06879a3e6"
 dependencies = [
- "nix",
+ "nix 0.18.0",
  "once_cell",
  "smallvec",
  "wayland-sys",
@@ -611,7 +623,7 @@ version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0aad1b4301cdccfb5f64056a4736e8155a5f4734bac41fdbca80b1fdbe1ab3e1"
 dependencies = [
- "nix",
+ "nix 0.18.0",
  "wayland-client",
  "xcursor",
 ]
@@ -693,6 +705,7 @@ dependencies = [
  "fuzzy-matcher",
  "image",
  "is_executable",
+ "nix 0.19.1",
  "rusttype",
  "smithay-client-toolkit",
  "wayland-client",

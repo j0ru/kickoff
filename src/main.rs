@@ -20,6 +20,8 @@ use std::fs::{self, DirEntry};
 use std::cmp;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use nix::unistd::{fork, ForkResult, execv};
+use std::ffi::CString;
 
 sctk::default_environment!(Launcher, desktop);
 
@@ -29,7 +31,7 @@ enum Action {
   Search,
 }
 
-type DData = (Option<WEvent>, String, Option<Action>);
+type DData<'a> = (Option<WEvent>, String, Option<Action>);
 
 fn main() {
 
@@ -111,11 +113,13 @@ fn main() {
     window.refresh();
   }
 
+  let mut matched_exe = fuzzy_sort(&executables, "");
   let mut data: DData = (None, "".to_string(), None);
   sctk::WaylandSource::new(queue).quick_insert(event_loop.handle()).unwrap();
 
   loop {
-    match data.0.take() {
+    let (event, query, action) = &mut data;
+    match event.take() {
       Some(WEvent::Close) => break,
       Some(WEvent::Refresh) => {
         window.refresh();
@@ -135,11 +139,27 @@ fn main() {
       None => {},
     }
 
-    if let Some(action) = data.2.take() {
+    if let Some(action) = action.take() {
       match action {
-        Action::Search => need_redraw = true,
+        Action::Search => {
+          need_redraw = true;
+          matched_exe = fuzzy_sort(&executables, query);
+        },
         Action::Exit => break,
-        Action::Execute => break, // TODO: Implement ;)
+        Action::Execute => {
+          println!("executing {:?}", matched_exe[0].path());
+          if let Some(path) = matched_exe.get(0) {
+            let path = path.path();
+            match unsafe{ fork()} {
+              Ok(ForkResult::Parent {..}) => {},
+              Ok(ForkResult::Child) => { execv(&CString::new(path.to_str().unwrap()).expect(""), &[&CString::new("").expect("")]).expect("Failed to launch app"); }
+              Err(_) => {
+                println!("failed to fork");
+              }
+            }
+          break;
+          }
+        }
       }
     }
 
@@ -155,15 +175,13 @@ fn main() {
 
           // TODO: move this mess to it's own function
           let mut img = base_img.clone();
-          let search = &data.1;
-          if !search.is_empty() {
-            let text_image: RgbaImage = render_text(&search, &font, Scale::uniform(64.), (152,195,121));
+          if !query.is_empty() {
+            let text_image: RgbaImage = render_text(&query, &font, Scale::uniform(64.), (152,195,121));
             image::imageops::overlay(&mut img, &text_image, 10, 10);
           }
 
-          let executables = fuzzy_sort(&executables, &search);
-          for i in 0..(cmp::min(10, executables.len())) {
-            let text_image: RgbaImage = render_text(&executables[i].file_name().to_str().unwrap(), &font, Scale::uniform(64.), (97,175,239));
+          for i in 0..(cmp::min(10, matched_exe.len())) {
+            let text_image: RgbaImage = render_text(&matched_exe[i].file_name().to_str().unwrap(), &font, Scale::uniform(64.), (97,175,239));
             image::imageops::overlay(&mut img, &text_image, 10, (100 + i * text_image.height() as usize) as u32);
 
           }
@@ -181,7 +199,6 @@ fn main() {
     display.flush().unwrap();
     event_loop.dispatch(None, &mut data).unwrap();
   }
-
 }
 
 fn render_text(text: &str, font: &rusttype::Font, scale: rusttype::Scale, colour: (u8, u8, u8)) -> RgbaImage {
@@ -271,7 +288,7 @@ fn redraw(
 
 fn fuzzy_sort<'a>(executables: &'a Vec<DirEntry>, pattern: &str) -> Vec<&'a DirEntry> {
   let matcher = SkimMatcherV2::default();
-  let mut executables = executables.into_iter().map(|x| (matcher.fuzzy_match(&x.file_name().into_string().ok().unwrap().to_lowercase() , pattern), x)).collect::<Vec<(Option<i64>, &DirEntry)>>();
+  let mut executables = executables.into_iter().map(|x| (matcher.fuzzy_match(&x.file_name().into_string().ok().unwrap().to_lowercase() , &pattern.to_lowercase()), x)).collect::<Vec<(Option<i64>, &DirEntry)>>();
   executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
   executables.into_iter().filter(|x| x.0.is_some()).into_iter().map(|x| x.1).collect()
 }

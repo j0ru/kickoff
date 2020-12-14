@@ -3,6 +3,9 @@ extern crate byteorder;
 extern crate rusttype;
 extern crate image;
 extern crate is_executable;
+extern crate shellwords;
+extern crate clap;
+extern crate css_color;
 
 use sctk::window::{ConceptFrame, Event as WEvent};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
@@ -16,12 +19,14 @@ use sctk::reexports::calloop;
 use sctk::seat::keyboard::{map_keyboard_repeat, Event as KbEvent, RepeatKind, KeyState};
 use smithay_client_toolkit::seat::keyboard::keysyms;
 use std::env;
-use std::fs::{self, DirEntry};
+use std::fs;
 use std::cmp;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
-use nix::unistd::{fork, ForkResult, execv};
+use nix::unistd::{fork, ForkResult, execvp};
 use std::ffi::CString;
+use sctk::window::Decorations;
+use clap::{Arg, App, crate_version, crate_authors};
 
 sctk::default_environment!(Launcher, desktop);
 
@@ -34,28 +39,75 @@ enum Action {
 
 type DData<'a> = (Option<WEvent>, String, Option<Action>);
 
+fn num_validator (num_str: String) -> Result<(), String> {
+  match num_str.parse::<u32>() {
+    Ok(_) => Ok(()),
+    Err(e) => Err(e.to_string()),
+  }
+}
+
+fn hex_validator (hex_str: String) -> Result<(), String> {
+  match hex_str.parse::<css_color::Rgba>() {
+    Ok(_) => Ok(()),
+    Err(_) => Err("color parsing error".to_string()),
+  }
+}
+
 fn main() {
 
-  let mut executables = get_executables().unwrap();
-  executables.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+  let matches = App::new("Kickoff")
+    .version(crate_version!())
+    .author(crate_authors!())
+    .about("Minimal program launcher, focused on usability and speed")
+    .arg(Arg::with_name("width")
+      .short("w")
+      .long("width")
+      .value_name("PIXEL")
+      .validator(num_validator)
+      .help("Set window width"))
+    .arg(Arg::with_name("heigth")
+      .short("h")
+      .long("heigth")
+      .value_name("PIXEL")
+      .validator(num_validator)
+      .help("Set window heigth"))
+    .arg(Arg::with_name("background")
+      .long("background")
+      .value_name("COLOR")
+      .validator(hex_validator)
+      .help("Background color"))
+    .get_matches();
+  
+  let heigth: u32 = matches.value_of("heigth").unwrap_or("600").parse().unwrap();
+  let width: u32 = matches.value_of("width").unwrap_or("800").parse().unwrap();
+  let mut dimensions = (width, heigth);
+  let color_background = matches.value_of("background").unwrap_or("#222222aa").parse::<css_color::Rgba>().unwrap();
+  let color_background = Rgba([
+    (color_background.red * 255.) as u8 ,
+    (color_background.green * 255.) as u8 ,
+    (color_background.blue * 255.) as u8 ,
+    (color_background.alpha * 255.) as u8]);
+
+  let font_size = 30.0;
+  let padding = 50;
+
+  let mut applications = get_executable_names().unwrap();
+  applications.sort();
   
   let mut event_loop = calloop::EventLoop::<DData>::new().unwrap();
 
   let mut seats = Vec::<(String, Option<(wl_keyboard::WlKeyboard, calloop::Source<_>)>)>::new();
 
   // Window stuff
-  let mut dimensions = (1920, 1080);
   let (env, display, queue) = sctk::new_default_environment!(Launcher, desktop)
     .expect("Unable to connect to the Wayland server");
 
   let surface = env.create_surface().detach();
-  let base_img: RgbaImage = ImageBuffer::from_pixel(dimensions.0, dimensions.1, Rgba([0,0,0,200]));
-
 
   let mut window = env.create_window::<ConceptFrame, _>(
     surface,
     None,
-    (1920,1080),
+    dimensions,
     move |evt, mut dispatch_data| {
       let (next_action, _, _) = dispatch_data.get::<DData>().unwrap();
       let replace = match (&evt, &*next_action) {
@@ -71,8 +123,9 @@ fn main() {
     },
   ).expect("Failed to create a window");
 
-  window.set_title("WiniLauncher".to_string());
+  window.set_title("Kickoff".to_string());
   window.set_resizable(false);
+  window.set_decorate(Decorations::ClientSide);
 
   let mut pools = env.create_double_pool(|_| {}).expect("Failed to create the memory pools.");
 
@@ -109,12 +162,12 @@ fn main() {
 
   if !env.get_shell().unwrap().needs_configure() {
     if let Some(pool) = pools.pool() {
-      redraw(pool, window.surface(), dimensions, &base_img).expect("Failed to draw");
+      redraw(pool, window.surface(), dimensions, &ImageBuffer::from_pixel(dimensions.0, dimensions.1, color_background)).expect("Failed to draw");
     }
     window.refresh();
   }
 
-  let mut matched_exe = fuzzy_sort(&executables, "");
+  let mut matched_exe = fuzzy_sort(&applications, "");
   let mut data: DData = (None, "".to_string(), None);
   sctk::WaylandSource::new(queue).quick_insert(event_loop.handle()).unwrap();
 
@@ -144,29 +197,27 @@ fn main() {
       match action {
         Action::Search => {
           need_redraw = true;
-          matched_exe = fuzzy_sort(&executables, query);
+          matched_exe = fuzzy_sort(&applications, query);
         },
         Action::Exit => break,
         Action::Complete => {
-          if let Some(path) = matched_exe.get(0) {
+          if let Some(app) = matched_exe.get(0) {
             query.clear();
-            query.push_str(path.file_name().to_str().unwrap());
-            matched_exe = fuzzy_sort(&executables, query);
+            query.push_str(app);
+            matched_exe = fuzzy_sort(&applications, query);
             need_redraw = true;
           }
         },
         Action::Execute => {
-          println!("executing {:?}", matched_exe[0].path());
-          if let Some(path) = matched_exe.get(0) {
-            let path = path.path();
-            match unsafe{ fork()} {
+          if let Some(matched) = matched_exe.get(0) {
+            match unsafe{ fork() } {
               Ok(ForkResult::Parent {..}) => {},
-              Ok(ForkResult::Child) => { execv(&CString::new(path.to_str().unwrap()).expect(""), &[&CString::new("").expect("")]).expect("Failed to launch app"); }
+              Ok(ForkResult::Child) => { execvp(&CString::new(matched.as_str()).expect(""), &[CString::new("").expect("")]).expect("Failed to launch app"); }
               Err(_) => {
                 println!("failed to fork");
               }
             }
-          break;
+            break;
           }
         }
       }
@@ -183,15 +234,18 @@ fn main() {
           need_redraw = false;
 
           // TODO: move this mess to it's own function
-          let mut img = base_img.clone();
+          let mut img = ImageBuffer::from_pixel(dimensions.0, dimensions.1, color_background);
           if !query.is_empty() {
-            let text_image: RgbaImage = render_text(&query, &font, Scale::uniform(64.), (152,195,121));
-            image::imageops::overlay(&mut img, &text_image, 10, 10);
+            let text_image: RgbaImage = render_text(&query, &font, Scale::uniform(font_size), (152,195,121));
+            image::imageops::overlay(&mut img, &text_image, padding, padding);
           }
 
-          for i in 0..(cmp::min(10, matched_exe.len())) {
-            let text_image: RgbaImage = render_text(&matched_exe[i].file_name().to_str().unwrap(), &font, Scale::uniform(64.), (97,175,239));
-            image::imageops::overlay(&mut img, &text_image, 10, (100 + i * text_image.height() as usize) as u32);
+          let spacer = (1.5 * font_size) as u32;
+          let max_entries = ((dimensions.1 - 2 * padding - spacer) as f32 / font_size) as usize;
+
+          for i in 0..(cmp::min(max_entries, matched_exe.len())) {
+            let text_image: RgbaImage = render_text(&matched_exe[i], &font, Scale::uniform(font_size), (97,175,239));
+            image::imageops::overlay(&mut img, &text_image, padding, (padding + spacer + i as u32 * text_image.height()) as u32);
 
           }
 
@@ -242,13 +296,13 @@ fn render_text(text: &str, font: &rusttype::Font, scale: rusttype::Scale, colour
   return image;
 }
 
-fn get_executables() -> Option<Vec<DirEntry>> {
+fn get_executable_names() -> Option<Vec<String>> {
   let var = match env::var_os("PATH") {
     Some(var) => var,
     None => return None,
   };
 
-  let mut res: Vec<DirEntry> = Vec::new();
+  let mut res: Vec<String> = Vec::new();
 
   let paths_iter = env::split_paths(&var);
   let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
@@ -259,7 +313,7 @@ fn get_executables() -> Option<Vec<DirEntry>> {
         .filter(|file| !file.path().is_dir());
     
     for exe in executables_iter {
-      res.push(exe);
+      res.push(exe.file_name().to_str().unwrap().to_string());
     }
   }
 
@@ -295,30 +349,26 @@ fn redraw(
   Ok(())
 }
 
-fn fuzzy_sort<'a>(executables: &'a Vec<DirEntry>, pattern: &str) -> Vec<&'a DirEntry> {
+fn fuzzy_sort<'a>(executables: &'a Vec<String>, pattern: &str) -> Vec<&'a String> {
   let matcher = SkimMatcherV2::default();
-  let mut executables = executables.into_iter().map(|x| (matcher.fuzzy_match(&x.file_name().into_string().ok().unwrap().to_lowercase() , &pattern.to_lowercase()), x)).collect::<Vec<(Option<i64>, &DirEntry)>>();
+  let mut executables = executables.into_iter()
+    .map(|x| (matcher.fuzzy_match(&x.to_lowercase() , &pattern.to_lowercase()), x))
+    .collect::<Vec<(Option<i64>, &String)>>();
   executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
   executables.into_iter().filter(|x| x.0.is_some()).into_iter().map(|x| x.1).collect()
 }
 
-fn process_keyboard_event(event: KbEvent, seat_name: &str, mut data: DispatchData) {
-
+fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchData) {
   let (_, search, action) = data.get::<DData>().unwrap();
     match event {
-        KbEvent::Enter { keysyms, .. } => {
-            println!("Gained focus on seat '{}' while {} keys pressed.", seat_name, keysyms.len(),);
-        }
+        KbEvent::Enter { .. } => { }
         KbEvent::Leave { .. } => {
-            println!("Lost focus on seat '{}'.", seat_name);
+          *action = Some(Action::Exit);
         }
         KbEvent::Key { keysym, state, utf8, .. } => {
-            println!("Key {:?}: {:x} on seat '{}'.", state, keysym, seat_name);
             match (state, keysym) {
               (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
                 search.pop();
-                println!(" -> Backspace received");
-                println!(" -> Text is now \"{}\".", search.to_string());
                 *action = Some(Action::Search);
               },
               (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
@@ -333,19 +383,12 @@ fn process_keyboard_event(event: KbEvent, seat_name: &str, mut data: DispatchDat
               _ => {
                 if let Some(txt) = utf8 {
                   search.push_str(&txt);
-                  println!(" -> Received text \"{}\".", txt);
-                  println!(" -> Text is now \"{}\".", search.to_string());
                   *action = Some(Action::Search);
                 }
               }
             }
         }
         KbEvent::Modifiers { .. } => {}
-        KbEvent::Repeat { keysym, utf8, .. } => {
-            println!("Key repetition {:x} on seat '{}'.", keysym, seat_name);
-            if let Some(txt) = utf8 {
-                println!(" -> Received text \"{}\".", txt);
-            }
-        }
+        KbEvent::Repeat { .. } => { }
     }
 }

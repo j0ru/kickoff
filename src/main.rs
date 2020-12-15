@@ -8,24 +8,23 @@ extern crate clap;
 extern crate css_color;
 extern crate exec;
 
-use sctk::window::{ConceptFrame, Event as WEvent};
-use std::io::{BufWriter, Seek, SeekFrom, Write};
-use sctk::shm::MemPool;
-use byteorder::{NativeEndian, WriteBytesExt};
+use sctk::window::{ConceptFrame, Event as WEvent, Decorations};
 use sctk::reexports::client::protocol::{wl_keyboard, wl_shm, wl_surface};
 use sctk::reexports::client::DispatchData;
-use rusttype::{point, Font, Scale};
-use image::{RgbaImage, ImageBuffer, Rgba, Pixel};
 use sctk::reexports::calloop;
 use sctk::seat::keyboard::{map_keyboard_repeat, Event as KbEvent, RepeatKind, KeyState};
-use smithay_client_toolkit::seat::keyboard::keysyms;
-use std::env;
-use std::fs;
-use std::cmp;
+use sctk::seat::keyboard::keysyms;
+use sctk::shm::MemPool;
+
+use std::io::{BufWriter, Seek, SeekFrom, Write};
+use std::{env, fs, cmp};
+
+use byteorder::{NativeEndian, WriteBytesExt};
+use rusttype::{point, Font, Scale};
+use image::{RgbaImage, ImageBuffer, Rgba, Pixel};
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use nix::unistd::{fork, ForkResult};
-use sctk::window::Decorations;
 use clap::{Arg, App, crate_version, crate_authors};
 
 sctk::default_environment!(Launcher, desktop);
@@ -35,6 +34,8 @@ enum Action {
   Exit,
   Search,
   Complete,
+  NavUp,
+  NavDown,
 }
 
 type DData<'a> = (Option<WEvent>, String, Option<Action>);
@@ -169,6 +170,7 @@ fn main() {
 
   let mut matched_exe = fuzzy_sort(&applications, "");
   let mut data: DData = (None, "".to_string(), None);
+  let mut selection = 0;
   sctk::WaylandSource::new(queue).quick_insert(event_loop.handle()).unwrap();
 
   loop {
@@ -195,21 +197,30 @@ fn main() {
 
     if let Some(action) = action.take() {
       match action {
+        Action::NavUp => {
+          need_redraw = true;
+          if selection > 0 {selection -=1; }
+        },
+        Action::NavDown => {
+          need_redraw = true;
+          if selection < matched_exe.len() - 1 {selection += 1;}
+        },
         Action::Search => {
           need_redraw = true;
           matched_exe = fuzzy_sort(&applications, query);
+          selection = 0;
         },
-        Action::Exit => break,
         Action::Complete => {
           if let Some(app) = matched_exe.get(0) {
             query.clear();
             query.push_str(app);
             matched_exe = fuzzy_sort(&applications, query);
             need_redraw = true;
+            selection = 0;
           }
         },
         Action::Execute => {
-          if let Some(matched) = matched_exe.get(0) {
+          if let Some(matched) = matched_exe.get(selection) {
             match unsafe{ fork() } {
               Ok(ForkResult::Parent {..}) => {},
               Ok(ForkResult::Child) => {
@@ -236,7 +247,8 @@ fn main() {
               break;
             }
           }
-        }
+        },
+        Action::Exit => break,
       }
     }
 
@@ -259,10 +271,14 @@ fn main() {
 
           let spacer = (1.5 * font_size) as u32;
           let max_entries = ((dimensions.1 - 2 * padding - spacer) as f32 / font_size) as usize;
+          let offset = if selection > (max_entries / 2) {
+            (selection - max_entries / 2) as usize
+          } else {0};
 
-          for i in 0..(cmp::min(max_entries, matched_exe.len())) {
-            let text_image: RgbaImage = render_text(&matched_exe[i], &font, Scale::uniform(font_size), (97,175,239));
-            image::imageops::overlay(&mut img, &text_image, padding, (padding + spacer + i as u32 * text_image.height()) as u32);
+          for i in offset..(cmp::min(max_entries + offset, matched_exe.len())) {
+            let color = if i == selection {(97,175,239)} else {(255, 255, 255)};
+            let text_image: RgbaImage = render_text(&matched_exe[i], &font, Scale::uniform(font_size), color);
+            image::imageops::overlay(&mut img, &text_image, padding, (padding + spacer + (i - offset) as u32 * text_image.height()) as u32);
 
           }
 
@@ -393,6 +409,12 @@ fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchDa
               },
               (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
                 *action = Some(Action::Execute);
+              },
+              (KeyState::Pressed, keysyms::XKB_KEY_Up) => {
+                *action = Some(Action::NavUp);
+              },
+              (KeyState::Pressed, keysyms::XKB_KEY_Down) => {
+                *action = Some(Action::NavDown);
               },
               (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
                 *action = Some(Action::Exit);

@@ -6,6 +6,7 @@ extern crate is_executable;
 extern crate shellwords;
 extern crate clap;
 extern crate css_color;
+extern crate exec;
 
 use sctk::window::{ConceptFrame, Event as WEvent};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
@@ -23,8 +24,7 @@ use std::fs;
 use std::cmp;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
-use nix::unistd::{fork, ForkResult, execvp};
-use std::ffi::CString;
+use nix::unistd::{fork, ForkResult};
 use sctk::window::Decorations;
 use clap::{Arg, App, crate_version, crate_authors};
 
@@ -81,14 +81,14 @@ fn main() {
   let heigth: u32 = matches.value_of("heigth").unwrap_or("600").parse().unwrap();
   let width: u32 = matches.value_of("width").unwrap_or("800").parse().unwrap();
   let mut dimensions = (width, heigth);
-  let color_background = matches.value_of("background").unwrap_or("#222222aa").parse::<css_color::Rgba>().unwrap();
+  let color_background = matches.value_of("background").unwrap_or("#222222ff").parse::<css_color::Rgba>().unwrap();
   let color_background = Rgba([
     (color_background.red * 255.) as u8 ,
     (color_background.green * 255.) as u8 ,
     (color_background.blue * 255.) as u8 ,
     (color_background.alpha * 255.) as u8]);
 
-  let font_size = 30.0;
+  let font_size = 32.0;
   let padding = 50;
 
   let mut applications = get_executable_names().unwrap();
@@ -212,12 +212,29 @@ fn main() {
           if let Some(matched) = matched_exe.get(0) {
             match unsafe{ fork() } {
               Ok(ForkResult::Parent {..}) => {},
-              Ok(ForkResult::Child) => { execvp(&CString::new(matched.as_str()).expect(""), &[CString::new("").expect("")]).expect("Failed to launch app"); }
+              Ok(ForkResult::Child) => {
+                let err = exec::Command::new(matched).exec();
+                println!("Error: {}", err); // TODO: show that in ui
+              }
               Err(_) => {
                 println!("failed to fork");
               }
             }
             break;
+          } else if let Ok(mut args) = shellwords::split(query) {
+            if args.len() >= 1 {
+              match unsafe{ fork() } {
+                Ok(ForkResult::Parent {..}) => {},
+                Ok(ForkResult::Child) => {
+                  let err = exec::Command::new(args.remove(0)).args(&args).exec();
+                  println!("Error: {}", err);
+                }
+                Err(_) => {
+                  println!("failed to fork");
+                }
+              }
+              break;
+            }
           }
         }
       }

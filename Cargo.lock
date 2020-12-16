@@ -364,6 +364,7 @@ dependencies = [
  "shellwords",
  "smithay-client-toolkit",
  "wayland-client",
+ "xdg",
 ]
 
 [[package]]

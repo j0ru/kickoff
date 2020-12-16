@@ -18,6 +18,7 @@ use sctk::shm::MemPool;
 
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::{env, fs, cmp};
+use std::collections::HashMap;
 
 use byteorder::{NativeEndian, WriteBytesExt};
 use rusttype::{point, Font, Scale};
@@ -26,6 +27,8 @@ use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use nix::unistd::{fork, ForkResult};
 use clap::{Arg, App, crate_version, crate_authors};
+
+mod config;
 
 sctk::default_environment!(Launcher, desktop);
 
@@ -56,6 +59,15 @@ fn hex_validator (hex_str: String) -> Result<(), String> {
 
 fn main() {
 
+  let history = config::get_history().unwrap_or_default();
+  let mut applications = get_executable_names().unwrap();
+  for app in history.keys() {
+    if !applications.contains(app) {
+      applications.push(app.to_string());
+    }
+  }
+  applications.sort();
+
   let matches = App::new("Kickoff")
     .version(crate_version!())
     .author(crate_authors!())
@@ -82,7 +94,7 @@ fn main() {
   let heigth: u32 = matches.value_of("heigth").unwrap_or("600").parse().unwrap();
   let width: u32 = matches.value_of("width").unwrap_or("800").parse().unwrap();
   let mut dimensions = (width, heigth);
-  let color_background = matches.value_of("background").unwrap_or("#222222ff").parse::<css_color::Rgba>().unwrap();
+  let color_background = matches.value_of("background").unwrap_or("#222222aa").parse::<css_color::Rgba>().unwrap();
   let color_background = Rgba([
     (color_background.red * 255.) as u8 ,
     (color_background.green * 255.) as u8 ,
@@ -92,8 +104,6 @@ fn main() {
   let font_size = 32.0;
   let padding = 50;
 
-  let mut applications = get_executable_names().unwrap();
-  applications.sort();
   
   let mut event_loop = calloop::EventLoop::<DData>::new().unwrap();
 
@@ -168,7 +178,7 @@ fn main() {
     window.refresh();
   }
 
-  let mut matched_exe = fuzzy_sort(&applications, "");
+  let mut matched_exe = fuzzy_sort(&applications, "", &history);
   let mut data: DData = (None, "".to_string(), None);
   let mut selection = 0;
   sctk::WaylandSource::new(queue).quick_insert(event_loop.handle()).unwrap();
@@ -207,14 +217,14 @@ fn main() {
         },
         Action::Search => {
           need_redraw = true;
-          matched_exe = fuzzy_sort(&applications, query);
+          matched_exe = fuzzy_sort(&applications, query, &history);
           selection = 0;
         },
         Action::Complete => {
           if let Some(app) = matched_exe.get(0) {
             query.clear();
             query.push_str(app);
-            matched_exe = fuzzy_sort(&applications, query);
+            matched_exe = fuzzy_sort(&applications, query, &history);
             need_redraw = true;
             selection = 0;
           }
@@ -222,7 +232,11 @@ fn main() {
         Action::Execute => {
           if let Some(matched) = matched_exe.get(selection) {
             match unsafe{ fork() } {
-              Ok(ForkResult::Parent {..}) => {},
+              Ok(ForkResult::Parent {..}) => {
+                let mut history = history.clone();
+                history.insert(matched.to_string(), history.get(*matched).unwrap_or(&0) + 1);
+                config::commit_history(&history);
+              },
               Ok(ForkResult::Child) => {
                 let err = exec::Command::new(matched).exec();
                 println!("Error: {}", err); // TODO: show that in ui
@@ -235,7 +249,11 @@ fn main() {
           } else if let Ok(mut args) = shellwords::split(query) {
             if args.len() >= 1 {
               match unsafe{ fork() } {
-                Ok(ForkResult::Parent {..}) => {},
+                Ok(ForkResult::Parent {..}) => {
+                  let mut history = history.clone();
+                  history.insert(query.to_string(), history.get(query).unwrap_or(&0) + 1);
+                  config::commit_history(&history);
+                }
                 Ok(ForkResult::Child) => {
                   let err = exec::Command::new(args.remove(0)).args(&args).exec();
                   println!("Error: {}", err);
@@ -382,10 +400,10 @@ fn redraw(
   Ok(())
 }
 
-fn fuzzy_sort<'a>(executables: &'a Vec<String>, pattern: &str) -> Vec<&'a String> {
+fn fuzzy_sort<'a>(executables: &'a Vec<String>, pattern: &str, pre_scored: &'a HashMap<String, usize>) -> Vec<&'a String> {
   let matcher = SkimMatcherV2::default();
   let mut executables = executables.into_iter()
-    .map(|x| (matcher.fuzzy_match(&x.to_lowercase() , &pattern.to_lowercase()), x))
+    .map(|x| (if let Some(score) = matcher.fuzzy_match(&x , &pattern) {Some(score + *pre_scored.get(x).unwrap_or(&1) as i64)} else {None}, x))
     .collect::<Vec<(Option<i64>, &String)>>();
   executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
   executables.into_iter().filter(|x| x.0.is_some()).into_iter().map(|x| x.1).collect()

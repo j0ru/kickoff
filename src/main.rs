@@ -26,9 +26,9 @@ use image::{RgbaImage, ImageBuffer, Rgba, Pixel};
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use nix::unistd::{fork, ForkResult};
-use clap::{Arg, App, crate_version, crate_authors};
 
-mod config;
+mod history;
+mod cli;
 
 sctk::default_environment!(Launcher, desktop);
 
@@ -43,23 +43,11 @@ enum Action {
 
 type DData<'a> = (Option<WEvent>, String, Option<Action>);
 
-fn num_validator (num_str: String) -> Result<(), String> {
-  match num_str.parse::<u32>() {
-    Ok(_) => Ok(()),
-    Err(e) => Err(e.to_string()),
-  }
-}
-
-fn hex_validator (hex_str: String) -> Result<(), String> {
-  match hex_str.parse::<css_color::Rgba>() {
-    Ok(_) => Ok(()),
-    Err(_) => Err("color parsing error".to_string()),
-  }
-}
-
 fn main() {
 
-  let history = config::get_history().unwrap_or_default();
+  let matches = cli::build_cli().get_matches();
+
+  let history = history::get_history().unwrap_or_default();
   let mut applications = get_executable_names().unwrap();
   for app in history.keys() {
     if !applications.contains(app) {
@@ -68,29 +56,6 @@ fn main() {
   }
   applications.sort();
 
-  let matches = App::new("Kickoff")
-    .version(crate_version!())
-    .author(crate_authors!())
-    .about("Minimal program launcher, focused on usability and speed")
-    .arg(Arg::with_name("width")
-      .short("w")
-      .long("width")
-      .value_name("PIXEL")
-      .validator(num_validator)
-      .help("Set window width"))
-    .arg(Arg::with_name("heigth")
-      .short("h")
-      .long("heigth")
-      .value_name("PIXEL")
-      .validator(num_validator)
-      .help("Set window heigth"))
-    .arg(Arg::with_name("background")
-      .long("background")
-      .value_name("COLOR")
-      .validator(hex_validator)
-      .help("Background color"))
-    .get_matches();
-  
   let heigth: u32 = matches.value_of("heigth").unwrap_or("600").parse().unwrap();
   let width: u32 = matches.value_of("width").unwrap_or("800").parse().unwrap();
   let mut dimensions = (width, heigth);
@@ -235,7 +200,7 @@ fn main() {
               Ok(ForkResult::Parent {..}) => {
                 let mut history = history.clone();
                 history.insert(matched.to_string(), history.get(*matched).unwrap_or(&0) + 1);
-                config::commit_history(&history);
+                history::commit_history(&history);
               },
               Ok(ForkResult::Child) => {
                 let err = exec::Command::new(matched).exec();
@@ -252,7 +217,7 @@ fn main() {
                 Ok(ForkResult::Parent {..}) => {
                   let mut history = history.clone();
                   history.insert(query.to_string(), history.get(query).unwrap_or(&0) + 1);
-                  config::commit_history(&history);
+                  history::commit_history(&history);
                 }
                 Ok(ForkResult::Child) => {
                   let err = exec::Command::new(args.remove(0)).args(&args).exec();

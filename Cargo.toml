@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
 description = "Fast and minimal program launcher"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 wayland-client = "0.28.2"

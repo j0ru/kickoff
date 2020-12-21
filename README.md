@@ -3,6 +3,9 @@
 Kickoff is heavily inspired from rofi, but not without changes made.
 Like many programs, kickoff was born from an itch that no existing program seemed to relieve and my desire to learn a lower level programming language.
 
+## How does it search
+At the moment the path is read and non-recursively filtered for executable files. Other locations are still up for discussion.
+
 ## State
 This project is still in heavy development and the code quality and test coverage is in dire need of improvement. But it is usable and I will try not to brake *too* much in releases ;-)
 

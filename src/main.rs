@@ -33,6 +33,9 @@ use std::{cmp, env, fs};
 
 use nix::unistd::{fork, ForkResult};
 
+use font_loader::system_fonts::FontPropertyBuilder;
+use font_loader::system_fonts;
+
 mod cli;
 mod color;
 mod font;
@@ -71,7 +74,7 @@ impl Surface {
         let layer_surface = layer_shell.get_layer_surface(
             &surface,
             output,
-            zwlr_layer_shell_v1::Layer::Top,
+            zwlr_layer_shell_v1::Layer::Overlay,
             "launcher".to_owned(),
         );
 
@@ -171,17 +174,6 @@ enum Action {
 
 type DData<'a> = (String, Option<Action>);
 pub fn main() {
-    //let matches = cli::build_cli().get_matches();
-
-    let history = history::get_history().unwrap_or_default();
-    let mut applications = get_executable_names().unwrap();
-    for app in history.keys() {
-        if !applications.contains(app) {
-            applications.push(app.to_string());
-        }
-    }
-    applications.sort();
-
     let matches = cli::build_cli().get_matches();
 
     let history = history::get_history().unwrap_or_default();
@@ -201,11 +193,24 @@ pub fn main() {
             .unwrap(),
     );
 
-    let font_size = 32.0;
-    let padding = 50;
+    let padding: u32 = matches.value_of("padding").unwrap().parse().unwrap();
+    let font_size: f32 = matches.value_of("font-size").unwrap().parse().unwrap();
+    let font_name = matches.value_of("font").unwrap();
+    let font_builder = FontPropertyBuilder::new().family(font_name).build();
+    let (font_data, _) =  system_fonts::get(&font_builder).unwrap();
+
     let (env, display, queue) =
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
+
+    let history = history::get_history().unwrap_or_default();
+    let mut applications = get_executable_names().unwrap();
+    for app in history.keys() {
+        if !applications.contains(app) {
+            applications.push(app.to_string());
+        }
+    }
+    applications.sort();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env
@@ -254,16 +259,16 @@ pub fn main() {
         }
     }
 
-    let font_data = include_bytes!("../Roboto-Regular.ttf");
     let font = font::Font {
-        font: rusttype::Font::try_from_bytes(font_data as &[u8]).expect("Error constructing Font"),
-        scale: rusttype::Scale::uniform(32.),
+        font: rusttype::Font::try_from_bytes(&font_data).expect("Error constructing Font"),
+        scale: rusttype::Scale::uniform(font_size),
     };
 
     let mut matched_exe = fuzzy_sort(&applications, "", &history);
     let mut need_redraw = false;
     let mut data: DData = ("".to_string(), None);
     let mut selection = 0;
+    let mut select_query = false;
     loop {
         let (query, next_action) = &mut data;
         match surface.next_render_event.take() {
@@ -282,11 +287,15 @@ pub fn main() {
                     need_redraw = true;
                     if selection > 0 {
                         selection -= 1;
+                    } else if !query.is_empty() {
+                        select_query = true;
                     }
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if selection < matched_exe.len() - 1 {
+                    if select_query {
+                        select_query = false;
+                    } else if selection < matched_exe.len() - 1 {
                         selection += 1;
                     }
                 }
@@ -294,9 +303,10 @@ pub fn main() {
                     need_redraw = true;
                     matched_exe = fuzzy_sort(&applications, query, &history);
                     selection = 0;
+                    if matched_exe.len() == 0 { select_query = true }
                 }
                 Action::Complete => {
-                    if let Some(app) = matched_exe.get(0) {
+                    if let Some(app) = matched_exe.get(selection) {
                         query.clear();
                         query.push_str(app);
                         matched_exe = fuzzy_sort(&applications, query, &history);
@@ -305,38 +315,15 @@ pub fn main() {
                     }
                 }
                 Action::Execute => {
-                    if let Some(matched) = matched_exe.get(selection) {
-                        match unsafe { fork() } {
-                            Ok(ForkResult::Parent { .. }) => {
-                                let mut history = history.clone();
-                                history.insert(
-                                    matched.to_string(),
-                                    history.get(*matched).unwrap_or(&0) + 1,
-                                );
-                                match history::commit_history(&history) {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        println!("{}", e.to_string())
-                                    }
-                                };
-                            }
-                            Ok(ForkResult::Child) => {
-                                let err = exec::Command::new(matched).exec();
-                                println!("Error: {}", err); // TODO: show that in ui
-                            }
-                            Err(_) => {
-                                println!("failed to fork");
-                            }
-                        }
-                        break;
-                    } else if let Ok(mut args) = shellwords::split(query) {
-                        if args.len() >= 1 {
+                    let query = if select_query { query.to_string() }
+                        else { matched_exe.get(selection).unwrap().to_string() };
+                    if let Ok(mut args) = shellwords::split(&query) {
                             match unsafe { fork() } {
                                 Ok(ForkResult::Parent { .. }) => {
                                     let mut history = history.clone();
                                     history.insert(
                                         query.to_string(),
-                                        history.get(query).unwrap_or(&0) + 1,
+                                        history.get(&query).unwrap_or(&0) + 1,
                                     );
                                     match history::commit_history(&history) {
                                         Ok(_) => {}
@@ -354,9 +341,8 @@ pub fn main() {
                                 }
                             }
                             break;
-                        }
                     }
-                }
+                },
                 Action::Exit => break,
             }
         }
@@ -371,7 +357,12 @@ pub fn main() {
                 color_background.to_rgba(),
             );
             if !query.is_empty() {
-                let text_image: RgbaImage = font.render(&query, (152, 195, 121));
+                let color = if select_query {
+                    (97, 175, 239)
+                } else {
+                    (152, 195, 121)
+                };
+                let text_image: RgbaImage = font.render(&query, color);
                 image::imageops::overlay(&mut img, &text_image, padding, padding);
             }
 
@@ -385,7 +376,7 @@ pub fn main() {
             };
 
             for i in offset..(cmp::min(max_entries + offset, matched_exe.len())) {
-                let color = if i == selection {
+                let color = if i == selection && !select_query {
                     (97, 175, 239)
                 } else {
                     (255, 255, 255)
@@ -399,7 +390,10 @@ pub fn main() {
                 );
             }
 
-            surface.draw(&img);
+            match surface.draw(&img) {
+                Ok(_) => {},
+                Err(e) => println!("{}", e),
+            };
         }
 
         display.flush().unwrap();
@@ -493,6 +487,7 @@ fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchDa
                 *action = Some(Action::Exit);
             }
             _ => {
+                println!("{:?}", keysym);
                 if let Some(txt) = utf8 {
                     search.push_str(&txt);
                     *action = Some(Action::Search);

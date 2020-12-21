@@ -3,8 +3,7 @@ name = "kickoff"
 version = "0.1.0"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Fast and minimal program launcher"
 
 [dependencies]
 wayland-client = "0.28.2"
@@ -20,3 +19,4 @@ clap = "2.33.3"
 css-color = "0.1"
 exec = "0.3.1"
 xdg = "2.2.0"
+font-loader = "0.11.0"

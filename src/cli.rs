@@ -16,6 +16,13 @@ fn hex_validator(hex_str: String) -> Result<(), String> {
     }
 }
 
+fn float_validator(num_str: String) -> Result<(), String> {
+    match num_str.parse::<f32>() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 pub fn build_cli() -> App<'static, 'static> {
     App::new("Kickoff")
         .version(crate_version!())
@@ -27,6 +34,26 @@ pub fn build_cli() -> App<'static, 'static> {
                 .value_name("COLOR")
                 .validator(hex_validator)
                 .default_value("#222222aa")
-                .help("Background color"),
+                .help("Background color")
+        )
+        .arg(
+            Arg::with_name("padding")
+                .long("padding")
+                .value_name("PIXEL")
+                .default_value("100")
+                .validator(num_validator)
+        )
+        .arg(
+            Arg::with_name("font-size")
+                .long("font-size")
+                .value_name("PIXEL")
+                .default_value("32.")
+                .validator(float_validator)
+        )
+        .arg(
+            Arg::with_name("font")
+                .long("font")
+                .value_name("FONT")
+                .default_value("")
         )
 }

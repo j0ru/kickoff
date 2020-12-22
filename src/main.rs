@@ -33,9 +33,7 @@ use std::{cmp, env, fs};
 
 use nix::unistd::{fork, ForkResult};
 
-use font_loader::system_fonts::FontPropertyBuilder;
-use font_loader::system_fonts;
-
+mod config;
 mod cli;
 mod color;
 mod font;
@@ -175,6 +173,7 @@ enum Action {
 type DData<'a> = (String, Option<Action>);
 pub fn main() {
     let matches = cli::build_cli().get_matches();
+    let config = config::Config::from_args(matches);
 
     let history = history::get_history().unwrap_or_default();
     let mut applications = get_executable_names().unwrap();
@@ -184,20 +183,6 @@ pub fn main() {
         }
     }
     applications.sort();
-
-    let color_background = color::Color::from(
-        matches
-            .value_of("background-color")
-            .unwrap()
-            .parse::<css_color::Rgba>()
-            .unwrap(),
-    );
-
-    let padding: u32 = matches.value_of("padding").unwrap().parse().unwrap();
-    let font_size: f32 = matches.value_of("font-size").unwrap().parse().unwrap();
-    let font_name = matches.value_of("font").unwrap();
-    let font_builder = FontPropertyBuilder::new().family(font_name).build();
-    let (font_data, _) =  system_fonts::get(&font_builder).unwrap();
 
     let (env, display, queue) =
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
@@ -258,11 +243,6 @@ pub fn main() {
             }
         }
     }
-
-    let font = font::Font {
-        font: rusttype::Font::try_from_bytes(&font_data).expect("Error constructing Font"),
-        scale: rusttype::Scale::uniform(font_size),
-    };
 
     let mut matched_exe = fuzzy_sort(&applications, "", &history);
     let mut need_redraw = false;
@@ -354,21 +334,27 @@ pub fn main() {
             let mut img = ImageBuffer::from_pixel(
                 surface.dimensions.0,
                 surface.dimensions.1,
-                color_background.to_rgba(),
+                config.color_background.to_rgba(),
             );
+            let prompt_width = if !config.prompt.is_empty() {
+                let prompt = config.font.render(&config.prompt, &config.color_prompt);
+                image::imageops::overlay(&mut img, &prompt, config.padding, config.padding);
+                prompt.width()
+            } else { 0 };
+
             if !query.is_empty() {
                 let color = if select_query {
-                    (97, 175, 239)
+                    &config.color_text_selected
                 } else {
-                    (152, 195, 121)
+                    &config.color_text_query
                 };
-                let text_image: RgbaImage = font.render(&query, color);
-                image::imageops::overlay(&mut img, &text_image, padding, padding);
+                let text_image: RgbaImage = config.font.render(&query, color);
+                image::imageops::overlay(&mut img, &text_image, config.padding + prompt_width, config.padding);
             }
 
-            let spacer = (1.5 * font_size) as u32;
+            let spacer = (1.5 * config.font.scale.y) as u32;
             let max_entries =
-                ((surface.dimensions.1 - 2 * padding - spacer) as f32 / font_size) as usize;
+                ((surface.dimensions.1 - 2 * config.padding - spacer) as f32 / config.font.scale.y) as usize;
             let offset = if selection > (max_entries / 2) {
                 (selection - max_entries / 2) as usize
             } else {
@@ -377,16 +363,16 @@ pub fn main() {
 
             for i in offset..(cmp::min(max_entries + offset, matched_exe.len())) {
                 let color = if i == selection && !select_query {
-                    (97, 175, 239)
+                    &config.color_text_selected
                 } else {
-                    (255, 255, 255)
+                    &config.color_text
                 };
-                let text_image: RgbaImage = font.render(&matched_exe[i], color);
+                let text_image: RgbaImage = config.font.render(&matched_exe[i], color);
                 image::imageops::overlay(
                     &mut img,
                     &text_image,
-                    padding,
-                    (padding + spacer + (i - offset) as u32 * text_image.height()) as u32,
+                    config.padding,
+                    (config.padding + spacer + (i - offset) as u32 * text_image.height()) as u32,
                 );
             }
 
@@ -487,7 +473,6 @@ fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchDa
                 *action = Some(Action::Exit);
             }
             _ => {
-                println!("{:?}", keysym);
                 if let Some(txt) = utf8 {
                     search.push_str(&txt);
                     *action = Some(Action::Search);

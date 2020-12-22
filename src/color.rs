@@ -1,6 +1,6 @@
 use image::Rgba;
 
-pub struct Color(u8, u8, u8, u8);
+pub struct Color(pub u8, pub u8, pub u8, pub u8);
 
 impl From<css_color::Rgba> for Color {
     fn from(c: css_color::Rgba) -> Self {

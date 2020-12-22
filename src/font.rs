@@ -1,5 +1,4 @@
-extern crate image;
-extern crate rusttype;
+use crate::color::Color;
 
 pub struct Font<'a> {
     pub font: rusttype::Font<'a>,
@@ -7,7 +6,7 @@ pub struct Font<'a> {
 }
 
 impl Font<'_> {
-    pub fn render(&self, text: &str, color: (u8, u8, u8)) -> image::RgbaImage {
+    pub fn render(&self, text: &str, color: &Color) -> image::RgbaImage {
         let v_metrics = self.font.v_metrics(self.scale);
 
         let glyphs: Vec<_> = self
@@ -33,7 +32,7 @@ impl Font<'_> {
                         image.put_pixel(
                             x,
                             y,
-                            image::Rgba([color.0, color.1, color.2, (v * 255.) as u8]),
+                            image::Rgba([color.0, color.1, color.2, (v * color.3 as f32) as u8]),
                         )
                     }
                 });

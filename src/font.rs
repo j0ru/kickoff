@@ -1,11 +1,22 @@
 use crate::color::Color;
 
+use font_loader::system_fonts::FontPropertyBuilder;
+use font_loader::system_fonts;
+
 pub struct Font<'a> {
     pub font: rusttype::Font<'a>,
     pub scale: rusttype::Scale,
 }
 
 impl Font<'_> {
+    pub fn new(name: &str, size: f32) -> Font {
+        let font_builder = FontPropertyBuilder::new().family(name).build();
+        let (font_data, _) =  system_fonts::get(&font_builder).unwrap();
+        Font {
+            font: rusttype::Font::try_from_vec(font_data).expect("Error constructing Font"),
+            scale: rusttype::Scale::uniform(size),
+        }
+    }
     pub fn render(&self, text: &str, color: &Color) -> image::RgbaImage {
         let v_metrics = self.font.v_metrics(self.scale);
 

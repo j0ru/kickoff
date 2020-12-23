@@ -29,12 +29,11 @@ use image::{ImageBuffer, Pixel, RgbaImage};
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use std::collections::HashMap;
-use std::{cmp, env, fs};
+use std::{cmp, env, fs, process};
 
 use nix::unistd::{fork, ForkResult};
 
 mod config;
-mod cli;
 mod color;
 mod font;
 mod history;
@@ -172,8 +171,13 @@ enum Action {
 
 type DData<'a> = (String, Option<Action>);
 pub fn main() {
-    let matches = cli::build_cli().get_matches();
-    let config = config::Config::from_args(matches);
+    let maybe_config = config::Config::load();
+    if let Err(e) = maybe_config {
+        println!("{}", e);
+        process::exit(1);
+    }
+    let config = maybe_config.unwrap();
+    let font = font::Font::new(&config.font, config.font_size);
 
     let history = history::get_history().unwrap_or_default();
     let mut applications = get_executable_names().unwrap();
@@ -273,9 +277,9 @@ pub fn main() {
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if select_query {
+                    if select_query && matched_exe.len() > 0{
                         select_query = false;
-                    } else if selection < matched_exe.len() - 1 {
+                    } else if matched_exe.len() > 0 && selection < matched_exe.len() - 1 {
                         selection += 1;
                     }
                 }
@@ -286,12 +290,14 @@ pub fn main() {
                     if matched_exe.len() == 0 { select_query = true }
                 }
                 Action::Complete => {
-                    if let Some(app) = matched_exe.get(selection) {
+                    if !select_query {
+                        let app = matched_exe.get(selection).unwrap();
+                        if query == *app {
+                            selection = if selection < matched_exe.len() - 1 { selection + 1 } else { selection };
+                        }
                         query.clear();
-                        query.push_str(app);
-                        matched_exe = fuzzy_sort(&applications, query, &history);
+                        query.push_str(matched_exe.get(selection).unwrap());
                         need_redraw = true;
-                        selection = 0;
                     }
                 }
                 Action::Execute => {
@@ -337,7 +343,7 @@ pub fn main() {
                 config.color_background.to_rgba(),
             );
             let prompt_width = if !config.prompt.is_empty() {
-                let prompt = config.font.render(&config.prompt, &config.color_prompt);
+                let prompt = font.render(&config.prompt, &config.color_prompt);
                 image::imageops::overlay(&mut img, &prompt, config.padding, config.padding);
                 prompt.width()
             } else { 0 };
@@ -348,13 +354,13 @@ pub fn main() {
                 } else {
                     &config.color_text_query
                 };
-                let text_image: RgbaImage = config.font.render(&query, color);
+                let text_image: RgbaImage = font.render(&query, color);
                 image::imageops::overlay(&mut img, &text_image, config.padding + prompt_width, config.padding);
             }
 
-            let spacer = (1.5 * config.font.scale.y) as u32;
+            let spacer = (1.5 * font.scale.y) as u32;
             let max_entries =
-                ((surface.dimensions.1 - 2 * config.padding - spacer) as f32 / config.font.scale.y) as usize;
+                ((surface.dimensions.1 - 2 * config.padding - spacer) as f32 / font.scale.y) as usize;
             let offset = if selection > (max_entries / 2) {
                 (selection - max_entries / 2) as usize
             } else {
@@ -367,7 +373,7 @@ pub fn main() {
                 } else {
                     &config.color_text
                 };
-                let text_image: RgbaImage = config.font.render(&matched_exe[i], color);
+                let text_image: RgbaImage = font.render(&matched_exe[i], color);
                 image::imageops::overlay(
                     &mut img,
                     &text_image,

@@ -1,12 +1,10 @@
-use clap::ArgMatches;
-
 use crate::color::Color;
-use crate::font::Font;
+use confy;
 
-use font_loader::system_fonts::FontPropertyBuilder;
-use font_loader::system_fonts;
+use serde::{Serialize, Deserialize};
 
-pub struct Config<'a> {
+#[derive(Serialize, Deserialize)]
+pub struct Config {
     pub color_background: Color,
     pub color_text: Color,
     pub color_text_query: Color,
@@ -14,70 +12,28 @@ pub struct Config<'a> {
     pub color_prompt: Color,
     pub prompt: String,
     pub padding: u32,
-    pub font: Font<'a>,
+    pub font: String,
+    pub font_size: f32,
 }
 
-impl Config<'_> {
-    pub fn from_args(args: ArgMatches) -> Self {
-
-        let color_background = Color::from(
-            args
-                .value_of("color-background")
-                .unwrap()
-                .parse::<css_color::Rgba>()
-                .unwrap(),
-        );
-        let color_text = Color::from(
-            args
-                .value_of("color-text")
-                .unwrap()
-                .parse::<css_color::Rgba>()
-                .unwrap(),
-        );
-        let color_text_selected = Color::from(
-            args
-                .value_of("color-text-selected")
-                .unwrap()
-                .parse::<css_color::Rgba>()
-                .unwrap(),
-        );
-        let color_text_query = Color::from(
-            args
-                .value_of("color-text-query")
-                .unwrap()
-                .parse::<css_color::Rgba>()
-                .unwrap(),
-        );
-        let color_prompt = Color::from(
-            args
-                .value_of("color-prompt")
-                .unwrap()
-                .parse::<css_color::Rgba>()
-                .unwrap(),
-        );
-
-        let prompt = args.value_of("prompt").unwrap();
-        let padding: u32 = args.value_of("padding").unwrap().parse().unwrap();
-        let font_size: f32 = args.value_of("font-size").unwrap().parse().unwrap();
-
-        // Font parsing
-        let font_name = args.value_of("font").unwrap_or("");
-        let font_builder = FontPropertyBuilder::new().family(font_name).build();
-        let (font_data, _) =  system_fonts::get(&font_builder).unwrap();
-        let font = Font {
-            font: rusttype::Font::try_from_vec(font_data).expect("Error constructing Font"),
-            scale: rusttype::Scale::uniform(font_size),
-        };
-
+impl Default for Config {
+    fn default() -> Self {
         Config {
-            font: font,
-            padding: padding,
-            prompt: prompt.to_string(),
-            color_background: color_background,
-            color_text: color_text,
-            color_text_query: color_text_query,
-            color_text_selected: color_text_selected,
-            color_prompt: color_prompt,
+            color_background: Color(40,44,52,170),
+            color_prompt: Color(171, 178, 191,255),
+            color_text: Color(255,255,255,255),
+            color_text_query: Color(229, 192, 123, 255),
+            color_text_selected: Color(97, 175, 239, 255),
+            prompt: "".to_owned(),
+            padding: 100,
+            font: "".to_owned(),
+            font_size: 32.
         }
+    }
+}
+
+impl Config {
+    pub fn load() -> Result<Self, confy::ConfyError> {
+        confy::load("kickoff")
     }
 }

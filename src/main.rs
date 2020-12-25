@@ -18,13 +18,11 @@ use smithay_client_toolkit::{
     WaylandSource,
 };
 
-use byteorder::{NativeEndian, WriteBytesExt};
-
 use std::cell::Cell;
-use std::io::{BufWriter, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Seek, SeekFrom, Write, ErrorKind};
 use std::rc::Rc;
 
-use image::{ImageBuffer, Pixel, RgbaImage};
+use image::{ImageBuffer, RgbaImage};
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -116,10 +114,7 @@ impl Surface {
     }
 
     fn draw(&mut self, image: &RgbaImage) -> Result<(), std::io::Error> {
-        // Note: unwrap() is only used here in the interest of simplicity of the example.
-        // A "real" application should handle the case where both pools are still in use by the
-        // compositor.
-        let pool = self.pools.pool().unwrap();
+        if let Some(pool) = self.pools.pool() {
 
         let stride = 4 * self.dimensions.0 as i32;
         let width = self.dimensions.0 as i32;
@@ -129,16 +124,13 @@ impl Surface {
         pool.resize((stride * height) as usize)?;
 
         // Create a new buffer from the pool
-        let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Argb8888);
+        let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
 
         // Write the color to all bytes of the pool
         pool.seek(SeekFrom::Start(0))?;
         {
             let mut writer = BufWriter::new(&mut *pool);
-            for p in image.pixels() {
-                let c: (u8, u8, u8, u8) = p.channels4();
-                writer.write_u32::<NativeEndian>(u32::from_le_bytes([c.2, c.1, c.0, c.3]) as u32)?;
-            }
+            writer.write_all(image.as_raw())?;
             writer.flush()?;
         }
 
@@ -150,6 +142,10 @@ impl Surface {
         // Finally, commit the surface
         self.surface.commit();
         Ok(())
+        } else {
+            Err(std::io::Error::new(ErrorKind::Other, "All pools are in use by Wayland"))
+        }
+
     }
 }
 
@@ -384,7 +380,10 @@ pub fn main() {
 
             match surface.draw(&img) {
                 Ok(_) => {},
-                Err(e) => println!("{}", e),
+                Err(e) => {
+                    println!("{}", e);
+                    need_redraw = false;
+                },
             };
         }
 

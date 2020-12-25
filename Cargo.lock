@@ -512,7 +512,6 @@ dependencies = [
 name = "kickoff"
 version = "0.2.0"
 dependencies = [
- "byteorder",
  "confy",
  "css-color",
  "exec",

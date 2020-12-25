@@ -16,6 +16,22 @@ This project is still in heavy development and code quality as well as test cove
 * Remembers often used applications
 * Argument support for launched programs
 
+## Configuration
+A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml`
+
+| Key | Value |
+| --- | --- |
+| color_background | Background color |
+| color_text | Default color for search results |
+| color_text_selected | Color for the currently selected result |
+| color_text_query | Color for the search query |
+| color_prompt | Color for the prompt |
+| prompt | Characters shown bevor the query |
+| padding | Space between window border and content, does not affect background |
+| font | Font used to render text, has to be ttf or otf |
+| font_size | Font size ... |
+
+
 ## Roadmap (very incomplete and in no special order)
 * Paste support
 * UX improvements

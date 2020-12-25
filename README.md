@@ -29,7 +29,7 @@ A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml
 | prompt | Characters shown bevor the query |
 | padding | Space between window border and content, does not affect background |
 | font | Font used to render text, has to be ttf or otf |
-| font_size | Font size ... |
+| font_size | Font size |
 
 
 ## Roadmap (very incomplete and in no special order)

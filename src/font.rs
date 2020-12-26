@@ -19,6 +19,11 @@ impl Font<'_> {
             scale: rusttype::Scale::uniform(size),
         }
     }
+
+    pub async fn new_async(name: &str, size: f32) -> Font<'_> {
+        Font::new(name, size)
+    }
+
     pub fn render(
         &self,
         text: &str,

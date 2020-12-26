@@ -29,9 +29,9 @@ use fuzzy_matcher::FuzzyMatcher;
 use std::collections::HashMap;
 use std::{cmp, env, fs, process};
 
+use futures::executor::block_on;
+use futures::join;
 use nix::unistd::{fork, ForkResult};
-
-use std::time::Instant; //TODO: Debug code
 
 mod color;
 mod config;
@@ -176,23 +176,16 @@ pub fn main() {
         process::exit(1);
     }
     let config = maybe_config.unwrap();
-    let font = font::Font::new(&config.font, config.font_size);
-
-    let history = history::get_history().unwrap_or_default();
-    let mut applications = get_executable_names().unwrap();
-    for app in history.keys() {
-        if !applications.contains(app) {
-            applications.push(app.to_string());
-        }
-    }
-    applications.sort();
 
     let (env, display, queue) =
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let history = history::get_history().unwrap_or_default();
-    let mut applications = get_executable_names().unwrap();
+    let (maybe_history, maybe_applications, font) =
+        block_on(get_history_and_executables_and_font(&config));
+
+    let history = maybe_history.unwrap_or_default();
+    let mut applications = maybe_applications.unwrap();
     for app in history.keys() {
         if !applications.contains(app) {
             applications.push(app.to_string());
@@ -343,7 +336,6 @@ pub fn main() {
         }
 
         if need_redraw {
-            let timer = Instant::now();
             need_redraw = false;
 
             // TODO: move this mess to it's own function
@@ -412,7 +404,6 @@ pub fn main() {
                     need_redraw = false;
                 }
             };
-            println!("Frametime: {}ms", timer.elapsed().as_secs_f64() * 1000.);
         }
 
         display.flush().unwrap();
@@ -420,7 +411,21 @@ pub fn main() {
     }
 }
 
-fn get_executable_names() -> Option<Vec<String>> {
+async fn get_history_and_executables_and_font(
+    config: &config::Config,
+) -> (
+    Option<HashMap<String, usize>>,
+    Option<Vec<String>>,
+    font::Font<'_>,
+) {
+    join!(
+        history::get_history_async(),
+        get_executable_names(),
+        font::Font::new_async(&config.font, config.font_size)
+    )
+}
+
+async fn get_executable_names() -> Option<Vec<String>> {
     let var = match env::var_os("PATH") {
         Some(var) => var,
         None => return None,

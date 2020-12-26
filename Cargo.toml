@@ -22,6 +22,7 @@ font-loader = "0.11.0"
 confy = "0.4.0"
 serde = { version = "1.0.118", features = ["derive"] }
 hex = "0.4.2"
+futures = "0.3.8"
 
 [profile.release]
 lto = true

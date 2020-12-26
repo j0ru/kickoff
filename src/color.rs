@@ -1,7 +1,7 @@
-use image::Rgba;
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use serde::de::{Visitor, self};
 use hex::encode;
+use image::Rgba;
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 
@@ -26,7 +26,8 @@ impl Color {
 
 impl Serialize for Color {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer
+    where
+        S: Serializer,
     {
         let mut c = "#".to_string();
         c.push_str(&encode([self.0, self.1, self.2, self.3]));
@@ -37,7 +38,7 @@ impl Serialize for Color {
 impl<'de> Deserialize<'de> for Color {
     fn deserialize<D>(deserializer: D) -> Result<Color, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_str(ColorVisitor)
     }
@@ -52,8 +53,8 @@ impl<'de> Visitor<'de> for ColorVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where 
-        E: de::Error
+    where
+        E: de::Error,
     {
         let c = css_color::Rgba::from_str(value);
         if let Ok(c) = c {

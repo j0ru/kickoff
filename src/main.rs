@@ -19,7 +19,7 @@ use smithay_client_toolkit::{
 };
 
 use std::cell::Cell;
-use std::io::{BufWriter, Seek, SeekFrom, Write, ErrorKind};
+use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
 use std::rc::Rc;
 
 use image::{ImageBuffer, RgbaImage};
@@ -31,8 +31,10 @@ use std::{cmp, env, fs, process};
 
 use nix::unistd::{fork, ForkResult};
 
-mod config;
+use std::time::Instant; //TODO: Debug code
+
 mod color;
+mod config;
 mod font;
 mod history;
 
@@ -115,37 +117,38 @@ impl Surface {
 
     fn draw(&mut self, image: &RgbaImage) -> Result<(), std::io::Error> {
         if let Some(pool) = self.pools.pool() {
+            let stride = 4 * self.dimensions.0 as i32;
+            let width = self.dimensions.0 as i32;
+            let height = self.dimensions.1 as i32;
 
-        let stride = 4 * self.dimensions.0 as i32;
-        let width = self.dimensions.0 as i32;
-        let height = self.dimensions.1 as i32;
+            // First make sure the pool is the right size
+            pool.resize((stride * height) as usize)?;
 
-        // First make sure the pool is the right size
-        pool.resize((stride * height) as usize)?;
+            // Create a new buffer from the pool
+            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
 
-        // Create a new buffer from the pool
-        let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
+            // Write the color to all bytes of the pool
+            pool.seek(SeekFrom::Start(0))?;
+            {
+                let mut writer = BufWriter::new(&mut *pool);
+                writer.write_all(image.as_raw())?;
+                writer.flush()?;
+            }
 
-        // Write the color to all bytes of the pool
-        pool.seek(SeekFrom::Start(0))?;
-        {
-            let mut writer = BufWriter::new(&mut *pool);
-            writer.write_all(image.as_raw())?;
-            writer.flush()?;
-        }
+            // Attach the buffer to the surface and mark the entire surface as damaged
+            self.surface.attach(Some(&buffer), 0, 0);
+            self.surface
+                .damage_buffer(0, 0, width as i32, height as i32);
 
-        // Attach the buffer to the surface and mark the entire surface as damaged
-        self.surface.attach(Some(&buffer), 0, 0);
-        self.surface
-            .damage_buffer(0, 0, width as i32, height as i32);
-
-        // Finally, commit the surface
-        self.surface.commit();
-        Ok(())
+            // Finally, commit the surface
+            self.surface.commit();
+            Ok(())
         } else {
-            Err(std::io::Error::new(ErrorKind::Other, "All pools are in use by Wayland"))
+            Err(std::io::Error::new(
+                ErrorKind::Other,
+                "All pools are in use by Wayland",
+            ))
         }
-
     }
 }
 
@@ -249,6 +252,7 @@ pub fn main() {
     let mut data: DData = ("".to_string(), None);
     let mut selection = 0;
     let mut select_query = false;
+
     loop {
         let (query, next_action) = &mut data;
         match surface.next_render_event.take() {
@@ -273,7 +277,7 @@ pub fn main() {
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if select_query && matched_exe.len() > 0{
+                    if select_query && matched_exe.len() > 0 {
                         select_query = false;
                     } else if matched_exe.len() > 0 && selection < matched_exe.len() - 1 {
                         selection += 1;
@@ -283,13 +287,19 @@ pub fn main() {
                     need_redraw = true;
                     matched_exe = fuzzy_sort(&applications, query, &history);
                     selection = 0;
-                    if matched_exe.len() == 0 { select_query = true }
+                    if matched_exe.len() == 0 {
+                        select_query = true
+                    }
                 }
                 Action::Complete => {
                     if !select_query {
                         let app = matched_exe.get(selection).unwrap();
                         if query == *app {
-                            selection = if selection < matched_exe.len() - 1 { selection + 1 } else { selection };
+                            selection = if selection < matched_exe.len() - 1 {
+                                selection + 1
+                            } else {
+                                selection
+                            };
                         }
                         query.clear();
                         query.push_str(matched_exe.get(selection).unwrap());
@@ -297,39 +307,43 @@ pub fn main() {
                     }
                 }
                 Action::Execute => {
-                    let query = if select_query { query.to_string() }
-                        else { matched_exe.get(selection).unwrap().to_string() };
+                    let query = if select_query {
+                        query.to_string()
+                    } else {
+                        matched_exe.get(selection).unwrap().to_string()
+                    };
                     if let Ok(mut args) = shellwords::split(&query) {
-                            match unsafe { fork() } {
-                                Ok(ForkResult::Parent { .. }) => {
-                                    let mut history = history.clone();
-                                    history.insert(
-                                        query.to_string(),
-                                        history.get(&query).unwrap_or(&0) + 1,
-                                    );
-                                    match history::commit_history(&history) {
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            println!("{}", e.to_string())
-                                        }
-                                    };
-                                }
-                                Ok(ForkResult::Child) => {
-                                    let err = exec::Command::new(args.remove(0)).args(&args).exec();
-                                    println!("Error: {}", err);
-                                }
-                                Err(_) => {
-                                    println!("failed to fork");
-                                }
+                        match unsafe { fork() } {
+                            Ok(ForkResult::Parent { .. }) => {
+                                let mut history = history.clone();
+                                history.insert(
+                                    query.to_string(),
+                                    history.get(&query).unwrap_or(&0) + 1,
+                                );
+                                match history::commit_history(&history) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        println!("{}", e.to_string())
+                                    }
+                                };
                             }
-                            break;
+                            Ok(ForkResult::Child) => {
+                                let err = exec::Command::new(args.remove(0)).args(&args).exec();
+                                println!("Error: {}", err);
+                            }
+                            Err(_) => {
+                                println!("failed to fork");
+                            }
+                        }
+                        break;
                     }
-                },
+                }
                 Action::Exit => break,
             }
         }
 
         if need_redraw {
+            let timer = Instant::now();
             need_redraw = false;
 
             // TODO: move this mess to it's own function
@@ -339,10 +353,17 @@ pub fn main() {
                 config.color_background.to_rgba(),
             );
             let prompt_width = if !config.prompt.is_empty() {
-                let prompt = font.render(&config.prompt, &config.color_prompt);
-                image::imageops::overlay(&mut img, &prompt, config.padding, config.padding);
-                prompt.width()
-            } else { 0 };
+                let (width, _) = font.render(
+                    &config.prompt,
+                    &config.color_prompt,
+                    &mut img,
+                    config.padding,
+                    config.padding,
+                );
+                width
+            } else {
+                0
+            };
 
             if !query.is_empty() {
                 let color = if select_query {
@@ -350,13 +371,18 @@ pub fn main() {
                 } else {
                     &config.color_text_query
                 };
-                let text_image: RgbaImage = font.render(&query, color);
-                image::imageops::overlay(&mut img, &text_image, config.padding + prompt_width, config.padding);
+                font.render(
+                    &query,
+                    color,
+                    &mut img,
+                    config.padding + prompt_width,
+                    config.padding,
+                );
             }
 
             let spacer = (1.5 * font.scale.y) as u32;
-            let max_entries =
-                ((surface.dimensions.1 - 2 * config.padding - spacer) as f32 / font.scale.y) as usize;
+            let max_entries = ((surface.dimensions.1 - 2 * config.padding - spacer) as f32
+                / font.scale.y) as usize;
             let offset = if selection > (max_entries / 2) {
                 (selection - max_entries / 2) as usize
             } else {
@@ -369,22 +395,24 @@ pub fn main() {
                 } else {
                     &config.color_text
                 };
-                let text_image: RgbaImage = font.render(&matched_exe[i], color);
-                image::imageops::overlay(
+                font.render(
+                    &matched_exe[i],
+                    color,
                     &mut img,
-                    &text_image,
                     config.padding,
-                    (config.padding + spacer + (i - offset) as u32 * text_image.height()) as u32,
+                    (config.padding + spacer + (i - offset) as u32 * config.font_size as u32)
+                        as u32,
                 );
             }
 
             match surface.draw(&img) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
                     println!("{}", e);
                     need_redraw = false;
-                },
+                }
             };
+            println!("Frametime: {}ms", timer.elapsed().as_secs_f64() * 1000.);
         }
 
         display.flush().unwrap();

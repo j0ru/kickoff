@@ -1,7 +1,7 @@
 use crate::color::Color;
 use confy;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -19,15 +19,15 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            color_background: Color(40,44,52,170),
-            color_prompt: Color(171, 178, 191,255),
-            color_text: Color(255,255,255,255),
+            color_background: Color(40, 44, 52, 170),
+            color_prompt: Color(171, 178, 191, 255),
+            color_text: Color(255, 255, 255, 255),
             color_text_query: Color(229, 192, 123, 255),
             color_text_selected: Color(97, 175, 239, 255),
             prompt: "".to_owned(),
             padding: 100,
             font: "".to_owned(),
-            font_size: 32.
+            font_size: 32.,
         }
     }
 }

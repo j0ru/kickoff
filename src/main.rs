@@ -4,7 +4,11 @@ use smithay_client_toolkit::{
     new_default_environment,
     reexports::{
         calloop,
-        client::protocol::{wl_keyboard, wl_output, wl_shm, wl_surface},
+        client::protocol::{
+            wl_keyboard, wl_output,
+            wl_pointer::{ButtonState, Event as PEvent},
+            wl_shm, wl_surface,
+        },
         client::{Attached, DispatchData, Main},
         protocols::wlr::unstable::layer_shell::v1::client::{
             zwlr_layer_shell_v1, zwlr_layer_surface_v1,
@@ -219,6 +223,24 @@ pub fn main() {
         String,
         Option<(wl_keyboard::WlKeyboard, calloop::Source<_>)>,
     )>::new();
+
+    // first process already existing seats
+    for seat in env.get_all_seats() {
+        if let Some((has_ptr, name)) = with_seat_data(&seat, |seat_data| {
+            (
+                seat_data.has_pointer && !seat_data.defunct,
+                seat_data.name.clone(),
+            )
+        }) {
+            if has_ptr {
+                let pointer = seat.get_pointer();
+                pointer.quick_assign(move |_, event, ddata| process_pointer_event(event, ddata));
+            } else {
+                seats.push((name, None));
+            }
+        }
+    }
+
     // first process already existing seats
     for seat in env.get_all_seats() {
         if let Some((has_kbd, name)) = with_seat_data(&seat, |seat_data| {
@@ -493,6 +515,27 @@ fn fuzzy_sort<'a>(
         .collect()
 }
 
+fn process_pointer_event(event: PEvent, mut data: DispatchData) {
+    let DData {
+        query,
+        action,
+        clipboard,
+        ..
+    } = data.get::<DData>().unwrap();
+    match event {
+        PEvent::Button { button, state, .. } => {
+            if button == 274 && state == ButtonState::Pressed {
+                if let Ok(txt) = clipboard.load_primary() {
+                    query.clear();
+                    query.push_str(&txt);
+                    *action = Some(Action::Search);
+                }
+            }
+        }
+        _ => (),
+    }
+}
+
 fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
     let DData {
         query,
@@ -515,7 +558,7 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             if modifiers.ctrl {
                 match (state, keysym) {
                     (KeyState::Pressed, keysyms::XKB_KEY_v) => {
-                        if let Ok(txt) = clipboard.load(){
+                        if let Ok(txt) = clipboard.load() {
                             query.clear();
                             query.push_str(&txt);
                             *action = Some(Action::Search);

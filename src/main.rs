@@ -11,12 +11,16 @@ use smithay_client_toolkit::{
         },
     },
     seat::{
-        keyboard::{keysyms, map_keyboard_repeat, Event as KbEvent, KeyState, RepeatKind},
+        keyboard::{
+            keysyms, map_keyboard_repeat, Event as KbEvent, KeyState, ModifiersState, RepeatKind,
+        },
         with_seat_data,
     },
     shm::DoubleMemPool,
     WaylandSource,
 };
+
+use smithay_clipboard::Clipboard;
 
 use std::cell::Cell;
 use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
@@ -168,7 +172,13 @@ enum Action {
     NavDown,
 }
 
-type DData<'a> = (String, Option<Action>);
+struct DData {
+    query: String,
+    action: Option<Action>,
+    modifiers: ModifiersState,
+    clipboard: Clipboard,
+}
+
 pub fn main() {
     let maybe_config = config::Config::load();
     if let Err(e) = maybe_config {
@@ -218,13 +228,12 @@ pub fn main() {
             )
         }) {
             if has_kbd {
-                let seat_name = name.clone();
                 match map_keyboard_repeat(
                     event_loop.handle(),
                     &seat,
                     None,
                     RepeatKind::System,
-                    move |event, _, ddata| process_keyboard_event(event, &seat_name, ddata),
+                    move |event, _, ddata| process_keyboard_event(event, ddata),
                 ) {
                     Ok((kbd, repeat_source)) => {
                         seats.push((name, Some((kbd, repeat_source))));
@@ -242,12 +251,18 @@ pub fn main() {
 
     let mut matched_exe = fuzzy_sort(&applications, "", &history);
     let mut need_redraw = false;
-    let mut data: DData = ("".to_string(), None);
+    let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
+    let mut data: DData = DData {
+        query: "".to_string(),
+        action: None,
+        modifiers: ModifiersState::default(),
+        clipboard: clipboard,
+    };
     let mut selection = 0;
     let mut select_query = false;
 
     loop {
-        let (query, next_action) = &mut data;
+        let DData { query, action, .. } = &mut data;
         match surface.next_render_event.take() {
             Some(RenderEvent::Closed) => break,
             Some(RenderEvent::Configure { width, height }) => {
@@ -258,7 +273,7 @@ pub fn main() {
             }
             None => {}
         }
-        if let Some(action) = next_action.take() {
+        if let Some(action) = action.take() {
             match action {
                 Action::NavUp => {
                     need_redraw = true;
@@ -478,8 +493,14 @@ fn fuzzy_sort<'a>(
         .collect()
 }
 
-fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchData) {
-    let (search, action) = data.get::<DData>().unwrap();
+fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
+    let DData {
+        query,
+        action,
+        modifiers,
+        clipboard,
+        ..
+    } = data.get::<DData>().unwrap();
     match event {
         KbEvent::Enter { .. } => {}
         KbEvent::Leave { .. } => {
@@ -490,34 +511,49 @@ fn process_keyboard_event(event: KbEvent, _seat_name: &str, mut data: DispatchDa
             state,
             utf8,
             ..
-        } => match (state, keysym) {
-            (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
-                search.pop();
-                *action = Some(Action::Search);
-            }
-            (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
-                *action = Some(Action::Complete);
-            }
-            (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
-                *action = Some(Action::Execute);
-            }
-            (KeyState::Pressed, keysyms::XKB_KEY_Up) => {
-                *action = Some(Action::NavUp);
-            }
-            (KeyState::Pressed, keysyms::XKB_KEY_Down) => {
-                *action = Some(Action::NavDown);
-            }
-            (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
-                *action = Some(Action::Exit);
-            }
-            _ => {
-                if let Some(txt) = utf8 {
-                    search.push_str(&txt);
-                    *action = Some(Action::Search);
+        } => {
+            if modifiers.ctrl {
+                match (state, keysym) {
+                    (KeyState::Pressed, keysyms::XKB_KEY_v) => {
+                        if let Ok(txt) = clipboard.load(){
+                            query.clear();
+                            query.push_str(&txt);
+                            *action = Some(Action::Search);
+                        }
+                    }
+                    _ => (),
+                }
+            } else {
+                match (state, keysym) {
+                    (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
+                        query.pop();
+                        *action = Some(Action::Search);
+                    }
+                    (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
+                        *action = Some(Action::Complete);
+                    }
+                    (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
+                        *action = Some(Action::Execute);
+                    }
+                    (KeyState::Pressed, keysyms::XKB_KEY_Up) => {
+                        *action = Some(Action::NavUp);
+                    }
+                    (KeyState::Pressed, keysyms::XKB_KEY_Down) => {
+                        *action = Some(Action::NavDown);
+                    }
+                    (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
+                        *action = Some(Action::Exit);
+                    }
+                    _ => {
+                        if let Some(txt) = utf8 {
+                            query.push_str(&txt);
+                            *action = Some(Action::Search);
+                        }
+                    }
                 }
             }
-        },
-        KbEvent::Modifiers { .. } => {}
+        }
+        KbEvent::Modifiers { modifiers: m } => *modifiers = m,
         KbEvent::Repeat { .. } => {}
     }
 }

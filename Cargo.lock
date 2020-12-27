@@ -621,6 +621,7 @@ dependencies = [
  "serde",
  "shellwords",
  "smithay-client-toolkit",
+ "smithay-clipboard",
  "wayland-client",
  "xdg",
 ]
@@ -1011,6 +1012,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "scoped-tls"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea6a9290e3c9cf0f18145ef7ffa62d68ee0bf5fcd651017e586dc7fd5da448c2"
+
+[[package]]
 name = "scoped_threadpool"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1121,6 +1128,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "smithay-clipboard"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab88b219728cad0697a6c9e75da50bf5220ba01b3485e33e407931539a8ebc91"
+dependencies = [
+ "smithay-client-toolkit",
+ "wayland-client",
+]
+
+[[package]]
 name = "static_assertions"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1211,6 +1228,7 @@ dependencies = [
  "downcast-rs",
  "libc",
  "nix 0.18.0",
+ "scoped-tls",
  "wayland-commons",
  "wayland-scanner",
  "wayland-sys",
@@ -1268,6 +1286,8 @@ version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0814adbecc7ea97869971e1d1c1b657e31863dda6fd768f119ad3dc408a01e58"
 dependencies = [
+ "dlib",
+ "lazy_static",
  "pkg-config",
 ]
 

@@ -50,8 +50,8 @@ impl Font<'_> {
         for glyph in glyphs {
             if let Some(bounding_box) = glyph.pixel_bounding_box() {
                 glyph.draw(|x, y, v| {
-                    let x = x + bounding_box.min.x as u32 + x_offset;
-                    let y = y + bounding_box.min.y as u32 + y_offset;
+                    let x = (x as i32 + bounding_box.min.x + x_offset as i32) as u32;
+                    let y = (y as i32 + bounding_box.min.y + y_offset as i32) as u32;
                     if x < image.width() && y < image.height() {
                         image.get_pixel_mut(x, y).blend(&image::Rgba([
                             color.0,

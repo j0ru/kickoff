@@ -1,6 +1,6 @@
 [package]
 name = "kickoff"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
 description = "Fast and minimal program launcher"

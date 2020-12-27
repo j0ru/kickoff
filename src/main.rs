@@ -526,7 +526,6 @@ fn process_pointer_event(event: PEvent, mut data: DispatchData) {
         PEvent::Button { button, state, .. } => {
             if button == 274 && state == ButtonState::Pressed {
                 if let Ok(txt) = clipboard.load_primary() {
-                    query.clear();
                     query.push_str(&txt);
                     *action = Some(Action::Search);
                 }
@@ -559,7 +558,6 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                 match (state, keysym) {
                     (KeyState::Pressed, keysyms::XKB_KEY_v) => {
                         if let Ok(txt) = clipboard.load() {
-                            query.clear();
                             query.push_str(&txt);
                             *action = Some(Action::Search);
                         }

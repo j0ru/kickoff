@@ -37,3 +37,4 @@ A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml
 * UX improvements
 * Extended configurability
 * Testing and documentation
+* Rewrite the config loading

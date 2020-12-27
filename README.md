@@ -15,6 +15,7 @@ This project is still in heavy development and code quality as well as test cove
 * Fast and snappy (hopefully, improvements planned)
 * Remembers often used applications
 * Argument support for launched programs
+* Paste support
 
 ## Configuration
 A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml`
@@ -33,7 +34,6 @@ A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml
 
 
 ## Roadmap (very incomplete and in no special order)
-* Paste support
 * UX improvements
 * Extended configurability
 * Testing and documentation

@@ -1,41 +1,17 @@
 # Kickoff default config
 
-# All Colors support transparency and
-# can be defined as hex argb colors 
-
-# Background color
+# color format: rgb or rgba, if transparency is desired
 color_background = '#282c34aa'
-
-# Default color for search results
-color_text = '#ffffffff'
-
-# Color for the search query
-color_text_query = '#e5c07bff'
-
-# Color for the currently selected result
-color_text_selected = '#61afefff'
-
-# prompt color
 color_prompt = '#abb2bfff'
+color_text = '#ffffffff'           # for search results
+color_text_query = '#e5c07bff'     # for the search query
+color_text_selected = '#61afefff'  # for the currently selected result
 
-# A piece of text shown bevor the query. 
-# Let's suppose you would set this to "=>",
-# then your query line would look like this:
-#  => firef
+# Characters shown in front of the query.
 prompt = ''
 
-# Space between the windows border and the content.
-# You can use this to center the content a bit
-# but 100 should work for 1080p
+# space between window border and the content in pixel
 padding = 100
 
-# The font that will be used to render text on screen.
-# currently there is only support for ttf or otf fonts
-# and if the font is not found, the systems default 
-# will be choosen
-font = ''
-
-# smaller => more content
-# bigger => better readability
-# choose wisely
+font = ''  # otf or ttf only
 font_size = 32.0

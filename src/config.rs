@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use serde::{Deserialize};
 
 #[derive(Deserialize)]
+#[serde(default)]
 pub struct Config {
     pub color_background: Color,
     pub color_text: Color,

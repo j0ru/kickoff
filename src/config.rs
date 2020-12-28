@@ -1,9 +1,12 @@
 use crate::color::Color;
-use confy;
+use xdg::BaseDirectories;
+use toml;
+use std::fs::{read_to_string, write};
+use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct Config {
     pub color_background: Color,
     pub color_text: Color,
@@ -33,7 +36,16 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Self, confy::ConfyError> {
-        confy::load("kickoff")
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+        if let Some(config_file) = xdg_dirs.find_config_file("config.toml") {
+            let content = read_to_string(config_file)?;
+            Ok(toml::from_str(&content)?)
+        } else {
+            let config_file: PathBuf = xdg_dirs.place_config_file("config.toml")?;
+            let default = include_bytes!("default_config.toml");
+            write(config_file, default)?;
+            Ok(toml::from_str(&String::from_utf8_lossy(default))?)
+        }
     }
 }

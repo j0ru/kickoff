@@ -1,7 +1,6 @@
-use hex::encode;
 use image::Rgba;
 use serde::de::{self, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer};
 use std::fmt;
 use std::str::FromStr;
 
@@ -21,17 +20,6 @@ impl From<css_color::Rgba> for Color {
 impl Color {
     pub fn to_rgba(&self) -> Rgba<u8> {
         Rgba([self.0, self.1, self.2, self.3])
-    }
-}
-
-impl Serialize for Color {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut c = "#".to_string();
-        c.push_str(&encode([self.0, self.1, self.2, self.3]));
-        serializer.serialize_str(&c)
     }
 }
 

@@ -44,7 +44,7 @@ impl Config {
             Ok(toml::from_str(&content)?)
         } else {
             let config_file: PathBuf = xdg_dirs.place_config_file("config.toml")?;
-            let default = include_bytes!("default_config.toml");
+            let default = include_bytes!("../assets/default_config.toml");
             write(config_file, default)?;
             Ok(toml::from_str(&String::from_utf8_lossy(default))?)
         }

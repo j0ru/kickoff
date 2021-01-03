@@ -18,7 +18,7 @@ This project is still in heavy development and code quality as well as test cove
 * Paste support
 
 ## Configuration
-A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/kickoff.toml`
+A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/config.toml`
 
 | Key | Value |
 | --- | --- |

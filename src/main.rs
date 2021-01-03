@@ -1,3 +1,4 @@
+#![feature(test)]
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
@@ -379,12 +380,12 @@ pub fn main() {
             let mut img = ImageBuffer::from_pixel(
                 surface.dimensions.0,
                 surface.dimensions.1,
-                config.color_background.to_rgba(),
+                config.colors.background.to_rgba(),
             );
             let prompt_width = if !config.prompt.is_empty() {
                 let (width, _) = font.render(
                     &config.prompt,
-                    &config.color_prompt,
+                    &config.colors.prompt,
                     &mut img,
                     config.padding,
                     config.padding,
@@ -396,9 +397,9 @@ pub fn main() {
 
             if !query.is_empty() {
                 let color = if select_query {
-                    &config.color_text_selected
+                    &config.colors.text_selected
                 } else {
-                    &config.color_text_query
+                    &config.colors.text_query
                 };
                 font.render(
                     &query,
@@ -420,9 +421,9 @@ pub fn main() {
 
             for i in offset..(cmp::min(max_entries + offset, matched_exe.len())) {
                 let color = if i == selection && !select_query {
-                    &config.color_text_selected
+                    &config.colors.text_selected
                 } else {
-                    &config.color_text
+                    &config.colors.text
                 };
                 font.render(
                     &matched_exe[i],

@@ -1,12 +1,5 @@
 # Kickoff default config
 
-# color format: rgb or rgba, if transparency is desired
-color_background = '#282c34aa'
-color_prompt = '#abb2bfff'
-color_text = '#ffffffff'           # for search results
-color_text_query = '#e5c07bff'     # for the search query
-color_text_selected = '#61afefff'  # for the currently selected result
-
 # Characters shown in front of the query.
 prompt = ''
 
@@ -15,3 +8,11 @@ padding = 100
 
 font = ''  # otf or ttf only
 font_size = 32.0
+
+[colors]
+# color format: rgb or rgba, if transparency is desired
+background = '#282c34aa'
+prompt = '#abb2bfff'
+text = '#ffffffff'           # for search results
+text_query = '#e5c07bff'     # for the search query
+text_selected = '#61afefff'  # for the currently selected result

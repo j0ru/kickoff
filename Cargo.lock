@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "kickoff"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "css-color",
  "exec",

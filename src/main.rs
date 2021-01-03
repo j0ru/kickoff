@@ -1,4 +1,3 @@
-#![feature(test)]
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,

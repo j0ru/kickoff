@@ -201,11 +201,14 @@ pub fn main() {
     let history = maybe_history.unwrap_or_default();
     let mut applications = maybe_applications.unwrap();
     for app in history.keys() {
-        if !applications.contains(app) {
-            applications.push(app.to_string());
-        }
+        applications.push(app.to_string());
     }
+
     applications.sort();
+    applications.dedup();
+    applications.sort_by(|a,b| {
+        history.get(b).unwrap_or(&0).cmp(history.get(a).unwrap_or(&0))
+    });
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env
@@ -271,7 +274,7 @@ pub fn main() {
         }
     }
 
-    let mut matched_exe = fuzzy_sort(&applications, "", &history);
+    let mut matched_exe: Vec<&String> = applications.iter().map(|x: &String| x).collect();
     let mut need_redraw = false;
     let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
     let mut data: DData = DData {
@@ -476,8 +479,7 @@ async fn get_executable_names() -> Option<Vec<String>> {
     for dir in dirs_iter {
         let executables_iter = dir
             .filter_map(|file| file.ok())
-            .filter(|file| is_executable::is_executable(file.path()))
-            .filter(|file| !file.path().is_dir());
+            .filter(|file| is_executable::is_executable(file.path()));
 
         for exe in executables_iter {
             res.push(exe.file_name().to_str().unwrap().to_string());

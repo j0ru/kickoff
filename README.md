@@ -14,7 +14,7 @@ This project is still in heavy development and code quality as well as test cove
 ## Features
 * Wayland compatible (only wlroots based compositors though)
 * Fuzzy search
-* Fast and snappy (hopefully, improvements planned)
+* Fast and snappy
 * Remembers often used applications
 * Argument support for launched programs
 * Paste support
@@ -24,6 +24,5 @@ A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/config.toml`
 or can be found [here](https://github.com/j0ru/kickoff/blob/main/assets/default_config.toml).
 
 ## Roadmap (very incomplete and in no special order)
-* UX improvements
-* Extended configurability
+* Speed improvements
 * Testing and documentation

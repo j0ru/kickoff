@@ -1,2 +1,4 @@
 /target
 **/*.rs.bk
+perf.data*
+flame.svg

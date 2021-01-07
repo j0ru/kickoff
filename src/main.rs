@@ -36,6 +36,7 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use std::collections::HashMap;
 use std::{cmp, env, fs, process};
+use std::os::unix::fs::PermissionsExt;
 
 use futures::executor::block_on;
 use futures::join;
@@ -479,7 +480,13 @@ async fn get_executable_names() -> Option<Vec<String>> {
     for dir in dirs_iter {
         let executables_iter = dir
             .filter_map(|file| file.ok())
-            .filter(|file| is_executable::is_executable(file.path()));
+            .filter(|file| {
+                if let Ok(metadata) = file.metadata() {
+                    return metadata.is_file() &&
+                        metadata.permissions().mode() & 0o111 != 0;
+                }
+                false
+            });
 
         for exe in executables_iter {
             res.push(exe.file_name().to_str().unwrap().to_string());

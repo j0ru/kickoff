@@ -507,15 +507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "is_executable"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "302d553b8abc8187beb7d663e34c065ac4570b273bc9511a50e940e99409c577"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "jpeg-decoder"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -536,7 +527,6 @@ dependencies = [
  "fuzzy-matcher",
  "hex",
  "image",
- "is_executable",
  "nix 0.19.1",
  "rusttype",
  "serde",

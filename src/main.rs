@@ -482,7 +482,7 @@ async fn get_executable_names() -> Option<Vec<String>> {
             .filter_map(|file| file.ok())
             .filter(|file| {
                 if let Ok(metadata) = file.metadata() {
-                    return metadata.is_file() &&
+                    return !metadata.is_dir() &&
                         metadata.permissions().mode() & 0o111 != 0;
                 }
                 false

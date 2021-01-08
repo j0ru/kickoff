@@ -604,6 +604,28 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             }
         }
         KbEvent::Modifiers { modifiers: m } => *modifiers = m,
-        KbEvent::Repeat { .. } => {}
+        KbEvent::Repeat { keysym, utf8, .. } => { 
+                match keysym {
+                    keysyms::XKB_KEY_BackSpace => {
+                        query.pop();
+                        *action = Some(Action::Search);
+                    }
+                    keysyms::XKB_KEY_Tab => {
+                        *action = Some(Action::Complete);
+                    }
+                    keysyms::XKB_KEY_Up => {
+                        *action = Some(Action::NavUp);
+                    }
+                    keysyms::XKB_KEY_Down => {
+                        *action = Some(Action::NavDown);
+                    }
+                    _ => {
+                        if let Some(txt) = utf8 {
+                            query.push_str(&txt);
+                            *action = Some(Action::Search);
+                        }
+                    }
+                }
+ }
     }
 }

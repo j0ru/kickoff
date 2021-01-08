@@ -5,6 +5,9 @@ authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
 description = "Fast and minimal program launcher"
 license = "GPL-3.0-or-later"
+homepage = "https://github.com/j0ru/kickoff"
+repository = "https://github.com/j0ru/kickoff"
+readme = "README.md"
 
 [dependencies]
 wayland-client = "0.28.2"

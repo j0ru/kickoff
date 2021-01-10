@@ -2,42 +2,19 @@ use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
     new_default_environment,
-    reexports::{
-        calloop,
-        client::protocol::{
-            wl_keyboard, wl_output,
-            wl_pointer::{ButtonState, Event as PEvent},
-            wl_shm, wl_surface,
-        },
-        client::{Attached, DispatchData, Main},
-        protocols::wlr::unstable::layer_shell::v1::client::{
-            zwlr_layer_shell_v1, zwlr_layer_surface_v1,
-        },
-    },
-    seat::{
-        keyboard::{
-            keysyms, map_keyboard_repeat, Event as KbEvent, KeyState, ModifiersState, RepeatKind,
-        },
-        with_seat_data,
-    },
-    shm::DoubleMemPool,
+    reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
 
-use smithay_clipboard::Clipboard;
-
-use std::cell::Cell;
-use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
-use std::rc::Rc;
-
-use image::{ImageBuffer, RgbaImage};
+use image::ImageBuffer;
 
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use std::collections::HashMap;
-use std::{cmp, env, fs, process};
 use std::os::unix::fs::PermissionsExt;
+use std::{cmp, env, fs, process};
 
+use crate::gui::{Action, DData, RenderEvent};
 use futures::executor::block_on;
 use futures::join;
 use nix::unistd::{fork, ForkResult};
@@ -45,6 +22,7 @@ use nix::unistd::{fork, ForkResult};
 mod color;
 mod config;
 mod font;
+mod gui;
 mod history;
 
 default_environment!(Env,
@@ -55,134 +33,6 @@ default_environment!(Env,
         zwlr_layer_shell_v1::ZwlrLayerShellV1 => layer_shell
     ],
 );
-
-#[derive(PartialEq, Copy, Clone)]
-enum RenderEvent {
-    Configure { width: u32, height: u32 },
-    Closed,
-}
-
-struct Surface {
-    surface: wl_surface::WlSurface,
-    layer_surface: Main<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1>,
-    next_render_event: Rc<Cell<Option<RenderEvent>>>,
-    pools: DoubleMemPool,
-    dimensions: (u32, u32),
-}
-
-impl Surface {
-    fn new(
-        output: Option<&wl_output::WlOutput>,
-        surface: wl_surface::WlSurface,
-        layer_shell: &Attached<zwlr_layer_shell_v1::ZwlrLayerShellV1>,
-        pools: DoubleMemPool,
-    ) -> Self {
-        let layer_surface = layer_shell.get_layer_surface(
-            &surface,
-            output,
-            zwlr_layer_shell_v1::Layer::Overlay,
-            "launcher".to_owned(),
-        );
-
-        // Anchor to the top left corner of the output
-        layer_surface.set_anchor(zwlr_layer_surface_v1::Anchor::all());
-
-        // Enable Keyboard interactivity
-        layer_surface.set_keyboard_interactivity(1);
-
-        let next_render_event = Rc::new(Cell::new(None::<RenderEvent>));
-        let next_render_event_handle = Rc::clone(&next_render_event);
-        layer_surface.quick_assign(move |layer_surface, event, _| {
-            match (event, next_render_event_handle.get()) {
-                (zwlr_layer_surface_v1::Event::Closed, _) => {
-                    next_render_event_handle.set(Some(RenderEvent::Closed));
-                }
-                (
-                    zwlr_layer_surface_v1::Event::Configure {
-                        serial,
-                        width,
-                        height,
-                    },
-                    next,
-                ) if next != Some(RenderEvent::Closed) => {
-                    layer_surface.ack_configure(serial);
-                    next_render_event_handle.set(Some(RenderEvent::Configure { width, height }));
-                }
-                (_, _) => {}
-            }
-        });
-
-        // Commit so that the server will send a configure event
-        surface.commit();
-
-        Self {
-            surface,
-            layer_surface,
-            next_render_event,
-            pools,
-            dimensions: (0, 0),
-        }
-    }
-
-    fn draw(&mut self, image: &RgbaImage) -> Result<(), std::io::Error> {
-        if let Some(pool) = self.pools.pool() {
-            let stride = 4 * self.dimensions.0 as i32;
-            let width = self.dimensions.0 as i32;
-            let height = self.dimensions.1 as i32;
-
-            // First make sure the pool is the right size
-            pool.resize((stride * height) as usize)?;
-
-            // Create a new buffer from the pool
-            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
-
-            // Write the color to all bytes of the pool
-            pool.seek(SeekFrom::Start(0))?;
-            {
-                let mut writer = BufWriter::new(&mut *pool);
-                writer.write_all(image.as_raw())?;
-                writer.flush()?;
-            }
-
-            // Attach the buffer to the surface and mark the entire surface as damaged
-            self.surface.attach(Some(&buffer), 0, 0);
-            self.surface
-                .damage_buffer(0, 0, width as i32, height as i32);
-
-            // Finally, commit the surface
-            self.surface.commit();
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                ErrorKind::Other,
-                "All pools are in use by Wayland",
-            ))
-        }
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        self.layer_surface.destroy();
-        self.surface.destroy();
-    }
-}
-
-enum Action {
-    Execute,
-    Exit,
-    Search,
-    Complete,
-    NavUp,
-    NavDown,
-}
-
-struct DData {
-    query: String,
-    action: Option<Action>,
-    modifiers: ModifiersState,
-    clipboard: Clipboard,
-}
 
 pub fn main() {
     let maybe_config = config::Config::load();
@@ -207,8 +57,11 @@ pub fn main() {
 
     applications.sort();
     applications.dedup();
-    applications.sort_by(|a,b| {
-        history.get(b).unwrap_or(&0).cmp(history.get(a).unwrap_or(&0))
+    applications.sort_by(|a, b| {
+        history
+            .get(b)
+            .unwrap_or(&0)
+            .cmp(history.get(a).unwrap_or(&0))
     });
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
@@ -216,86 +69,27 @@ pub fn main() {
         .create_double_pool(|_| {})
         .expect("Failed to create a memory pool!");
     let surface = env.create_surface().detach();
-    let mut surface = Surface::new(None, surface, &layer_shell, pools);
+    let mut surface = gui::Surface::new(None, surface, &layer_shell, pools);
 
     let mut event_loop = calloop::EventLoop::<DData>::new().unwrap();
     WaylandSource::new(queue)
         .quick_insert(event_loop.handle())
         .unwrap();
 
-    let mut seats = Vec::<(
-        String,
-        Option<(wl_keyboard::WlKeyboard, calloop::Source<_>)>,
-    )>::new();
-
-    // first process already existing seats
-    for seat in env.get_all_seats() {
-        if let Some((has_ptr, name)) = with_seat_data(&seat, |seat_data| {
-            (
-                seat_data.has_pointer && !seat_data.defunct,
-                seat_data.name.clone(),
-            )
-        }) {
-            if has_ptr {
-                let pointer = seat.get_pointer();
-                pointer.quick_assign(move |_, event, ddata| process_pointer_event(event, ddata));
-            } else {
-                seats.push((name, None));
-            }
-        }
-    }
-
-    // first process already existing seats
-    for seat in env.get_all_seats() {
-        if let Some((has_kbd, name)) = with_seat_data(&seat, |seat_data| {
-            (
-                seat_data.has_keyboard && !seat_data.defunct,
-                seat_data.name.clone(),
-            )
-        }) {
-            if has_kbd {
-                match map_keyboard_repeat(
-                    event_loop.handle(),
-                    &seat,
-                    None,
-                    RepeatKind::System,
-                    move |event, _, ddata| process_keyboard_event(event, ddata),
-                ) {
-                    Ok((kbd, repeat_source)) => {
-                        seats.push((name, Some((kbd, repeat_source))));
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to map keyboard on seat {} : {:?}.", name, e);
-                        seats.push((name, None));
-                    }
-                }
-            } else {
-                seats.push((name, None));
-            }
-        }
-    }
+    gui::register_inputs(&env.get_all_seats(), &event_loop);
 
     let mut matched_exe: Vec<&String> = applications.iter().map(|x: &String| x).collect();
     let mut need_redraw = false;
-    let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
-    let mut data: DData = DData {
-        query: "".to_string(),
-        action: None,
-        modifiers: ModifiersState::default(),
-        clipboard: clipboard,
-    };
+    let mut data = DData::new(&display);
     let mut selection = 0;
     let mut select_query = false;
 
     loop {
-        let DData { query, action, .. } = &mut data;
+        let gui::DData { query, action, .. } = &mut data;
         match surface.next_render_event.take() {
             Some(RenderEvent::Closed) => break,
             Some(RenderEvent::Configure { width, height }) => {
-                if surface.dimensions != (width, height) {
-                    surface.dimensions = (width, height);
-                    need_redraw = true;
-                }
+                need_redraw = surface.set_dimensions(width, height);
             }
             None => {}
         }
@@ -478,15 +272,12 @@ async fn get_executable_names() -> Option<Vec<String>> {
     let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
 
     for dir in dirs_iter {
-        let executables_iter = dir
-            .filter_map(|file| file.ok())
-            .filter(|file| {
-                if let Ok(metadata) = file.metadata() {
-                    return !metadata.is_dir() &&
-                        metadata.permissions().mode() & 0o111 != 0;
-                }
-                false
-            });
+        let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
+            if let Ok(metadata) = file.metadata() {
+                return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
+            }
+            false
+        });
 
         for exe in executables_iter {
             res.push(exe.file_name().to_str().unwrap().to_string());
@@ -522,110 +313,4 @@ fn fuzzy_sort<'a>(
         .into_iter()
         .map(|x| x.1)
         .collect()
-}
-
-fn process_pointer_event(event: PEvent, mut data: DispatchData) {
-    let DData {
-        query,
-        action,
-        clipboard,
-        ..
-    } = data.get::<DData>().unwrap();
-    match event {
-        PEvent::Button { button, state, .. } => {
-            if button == 274 && state == ButtonState::Pressed {
-                if let Ok(txt) = clipboard.load_primary() {
-                    query.push_str(&txt);
-                    *action = Some(Action::Search);
-                }
-            }
-        }
-        _ => (),
-    }
-}
-
-fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
-    let DData {
-        query,
-        action,
-        modifiers,
-        clipboard,
-        ..
-    } = data.get::<DData>().unwrap();
-    match event {
-        KbEvent::Enter { .. } => {}
-        KbEvent::Leave { .. } => {
-            *action = Some(Action::Exit);
-        }
-        KbEvent::Key {
-            keysym,
-            state,
-            utf8,
-            ..
-        } => {
-            if modifiers.ctrl {
-                match (state, keysym) {
-                    (KeyState::Pressed, keysyms::XKB_KEY_v) => {
-                        if let Ok(txt) = clipboard.load() {
-                            query.push_str(&txt);
-                            *action = Some(Action::Search);
-                        }
-                    }
-                    _ => (),
-                }
-            } else {
-                match (state, keysym) {
-                    (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
-                        query.pop();
-                        *action = Some(Action::Search);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
-                        *action = Some(Action::Complete);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
-                        *action = Some(Action::Execute);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Up) => {
-                        *action = Some(Action::NavUp);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Down) => {
-                        *action = Some(Action::NavDown);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
-                        *action = Some(Action::Exit);
-                    }
-                    _ => {
-                        if let Some(txt) = utf8 {
-                            query.push_str(&txt);
-                            *action = Some(Action::Search);
-                        }
-                    }
-                }
-            }
-        }
-        KbEvent::Modifiers { modifiers: m } => *modifiers = m,
-        KbEvent::Repeat { keysym, utf8, .. } => { 
-                match keysym {
-                    keysyms::XKB_KEY_BackSpace => {
-                        query.pop();
-                        *action = Some(Action::Search);
-                    }
-                    keysyms::XKB_KEY_Tab => {
-                        *action = Some(Action::Complete);
-                    }
-                    keysyms::XKB_KEY_Up => {
-                        *action = Some(Action::NavUp);
-                    }
-                    keysyms::XKB_KEY_Down => {
-                        *action = Some(Action::NavDown);
-                    }
-                    _ => {
-                        if let Some(txt) = utf8 {
-                            query.push_str(&txt);
-                            *action = Some(Action::Search);
-                        }
-                    }
-                }
- }
-    }
 }

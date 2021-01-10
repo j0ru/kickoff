@@ -46,7 +46,7 @@ pub fn main() {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let (maybe_history, maybe_applications, font) =
+    let (maybe_history, maybe_applications, mut font) =
         block_on(get_history_and_executables_and_font(&config));
 
     let history = maybe_history.unwrap_or_default();
@@ -207,9 +207,9 @@ pub fn main() {
                 );
             }
 
-            let spacer = (1.5 * font.scale.y) as u32;
+            let spacer = (1.5 * config.font_size) as u32;
             let max_entries = ((surface.dimensions.1 - 2 * config.padding - spacer) as f32
-                / font.scale.y) as usize;
+                / (config.font_size * 1.2)) as usize;
             let offset = if selection > (max_entries / 2) {
                 (selection - max_entries / 2) as usize
             } else {
@@ -227,7 +227,9 @@ pub fn main() {
                     color,
                     &mut img,
                     config.padding,
-                    (config.padding + spacer + (i - offset) as u32 * config.font_size as u32)
+                    (config.padding
+                        + spacer
+                        + (i - offset) as u32 * (config.font_size * 1.2) as u32)
                         as u32,
                 );
             }
@@ -251,7 +253,7 @@ async fn get_history_and_executables_and_font(
 ) -> (
     Option<HashMap<String, usize>>,
     Option<Vec<String>>,
-    font::Font<'_>,
+    font::Font,
 ) {
     join!(
         history::get_history_async(),

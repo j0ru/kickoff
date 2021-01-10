@@ -73,7 +73,7 @@ impl Font {
                                     color.0,
                                     color.1,
                                     color.2,
-                                    color.3 as u8,
+                                    255,
                                 ]),
                             );
                         } else {
@@ -81,7 +81,7 @@ impl Font {
                                 color.0,
                                 color.1,
                                 color.2,
-                                ((a as f32 / 255.) * color.3 as f32) as u8,
+                                a
                             ]));
                         }
                     }

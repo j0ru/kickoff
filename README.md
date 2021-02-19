@@ -5,6 +5,8 @@ Like many programs, kickoff was born from an itch that no existing program seeme
 
 ![AUR version](https://img.shields.io/aur/version/kickoff?label=Kickoff&logo=arch-linux&style=for-the-badge)
 
+![screenshot](assets/screenshot.png)
+
 ## How does it search
 At the moment the path is read and non-recursively filtered for executable files. Other locations are still up for discussion.
 
@@ -12,7 +14,7 @@ At the moment the path is read and non-recursively filtered for executable files
 This project is still in heavy development and code quality as well as test coverage are in dire need of improvement. But it is usable and I will try not to break *too* much between releases ;-)
 
 ## Features
-* Wayland compatible (only wlroots based compositors though)
+* Wayland native (only wlroots based compositors though)
 * Fuzzy search
 * Fast and snappy
 * Remembers often used applications

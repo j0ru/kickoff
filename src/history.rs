@@ -30,6 +30,8 @@ pub fn get_history<'a>(decrease_interval: u64) -> Option<HashMap<String, usize>>
         0
     };
 
+    println!("{}", interval_diff);
+
     decode_history(&read_to_string(cache_file).ok()?, interval_diff)
 }
 
@@ -51,7 +53,7 @@ fn decode_history(content: &str, substract: u64) -> Option<HashMap<String, usize
         match (words.get(1), words.get(0)) {
             (Some(p), Some(n)) => {
                 let launches = n.parse().unwrap_or(1);
-                res.insert(p.to_string(), max(launches - substract, 0) as usize)
+                res.insert(p.to_string(), max(launches - substract as i64, 0) as usize)
             }
             _ => None,
         };

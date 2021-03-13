@@ -9,6 +9,9 @@ padding = 100
 font = ''  # otf or ttf only
 font_size = 32.0
 
+[history]
+decrease_interval = 48       # interval to decrease the number of launches
+
 [colors]
 # color format: rgb or rgba, if transparency is desired
 background = '#282c34aa'

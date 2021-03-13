@@ -256,7 +256,7 @@ async fn get_history_and_executables_and_font(
     font::Font,
 ) {
     join!(
-        history::get_history_async(),
+        history::get_history_async(config.history.decrease_interval),
         get_executable_names(),
         font::Font::new_async(&config.font, config.font_size)
     )

@@ -18,12 +18,19 @@ pub struct ColorConfig {
 
 #[derive(Deserialize)]
 #[serde(default)]
+pub struct HistoryConfig {
+    pub decrease_interval: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
 pub struct Config {
     pub prompt: String,
     pub padding: u32,
     pub font: String,
     pub font_size: f32,
     pub colors: ColorConfig,
+    pub history: HistoryConfig,
 }
 impl Default for ColorConfig {
     fn default() -> Self {
@@ -44,6 +51,14 @@ impl Default for Config {
             font: "".to_owned(),
             font_size: 32.,
             colors: ColorConfig::default(),
+            history: HistoryConfig::default(),
+        }
+    }
+}
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        HistoryConfig {
+            decrease_interval: 48,
         }
     }
 }

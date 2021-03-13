@@ -66,23 +66,11 @@ impl Font {
                         - meta.ymin as f32) as u32;
                     if x < image.width() && y < image.height() {
                         if a == 255 {
-                            image.put_pixel(
-                                x,
-                                y,
-                                image::Rgba([
-                                    color.0,
-                                    color.1,
-                                    color.2,
-                                    255,
-                                ]),
-                            );
+                            image.put_pixel(x, y, image::Rgba([color.0, color.1, color.2, 255]));
                         } else {
-                            image.get_pixel_mut(x, y).blend(&image::Rgba([
-                                color.0,
-                                color.1,
-                                color.2,
-                                a
-                            ]));
+                            image
+                                .get_pixel_mut(x, y)
+                                .blend(&image::Rgba([color.0, color.1, color.2, a]));
                         }
                     }
                 }

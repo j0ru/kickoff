@@ -30,8 +30,6 @@ pub fn get_history<'a>(decrease_interval: u64) -> Option<HashMap<String, usize>>
         0
     };
 
-    println!("{}", interval_diff);
-
     decode_history(&read_to_string(cache_file).ok()?, interval_diff)
 }
 

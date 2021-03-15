@@ -62,10 +62,12 @@ fn decode_history(content: &str, substract: u64) -> Option<HashMap<String, usize
 fn encode_history(history: &HashMap<String, usize>) -> String {
     let mut res = String::new();
     for (p, n) in history.iter() {
-        res.push_str(&n.to_string());
-        res.push_str(" ");
-        res.push_str(&p);
-        res.push_str("\n");
+        if n > &0 {
+            res.push_str(&n.to_string());
+            res.push_str(" ");
+            res.push_str(&p);
+            res.push_str("\n");
+        }
     }
     res
 }

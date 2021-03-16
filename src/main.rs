@@ -78,7 +78,7 @@ pub fn main() {
 
     gui::register_inputs(&env.get_all_seats(), &event_loop);
 
-    let mut matched_exe: Vec<&String> = applications.iter().map(|x: &String| x).collect();
+    let mut matched_exe: Vec<&String> = applications.iter().collect();
     let mut need_redraw = false;
     let mut data = DData::new(&display);
     let mut selection = 0;
@@ -105,9 +105,9 @@ pub fn main() {
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if select_query && matched_exe.len() > 0 {
+                    if select_query && !matched_exe.is_empty() {
                         select_query = false;
-                    } else if matched_exe.len() > 0 && selection < matched_exe.len() - 1 {
+                    } else if !matched_exe.is_empty() && selection < matched_exe.len() - 1 {
                         selection += 1;
                     }
                 }
@@ -115,7 +115,7 @@ pub fn main() {
                     need_redraw = true;
                     matched_exe = fuzzy_sort(&applications, query, &history);
                     selection = 0;
-                    if matched_exe.len() == 0 {
+                    if matched_exe.is_empty() {
                         select_query = true
                     }
                 }
@@ -216,14 +216,19 @@ pub fn main() {
                 0
             };
 
-            for i in offset..(cmp::min(max_entries + offset, matched_exe.len())) {
+            for (i, matched) in matched_exe
+                .iter()
+                .enumerate()
+                .take(cmp::min(max_entries + offset, matched_exe.len()))
+                .skip(offset)
+            {
                 let color = if i == selection && !select_query {
                     &config.colors.text_selected
                 } else {
                     &config.colors.text
                 };
                 font.render(
-                    &matched_exe[i],
+                    &matched,
                     color,
                     &mut img,
                     config.padding,
@@ -290,13 +295,13 @@ async fn get_executable_names() -> Option<Vec<String>> {
 }
 
 fn fuzzy_sort<'a>(
-    executables: &'a Vec<String>,
+    executables: &'a [String],
     pattern: &str,
     pre_scored: &'a HashMap<String, usize>,
 ) -> Vec<&'a String> {
     let matcher = SkimMatcherV2::default();
     let mut executables = executables
-        .into_iter()
+        .iter()
         .map(|x| {
             (
                 if let Some(score) = matcher.fuzzy_match(&x, &pattern) {

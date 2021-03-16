@@ -56,21 +56,20 @@ impl Font {
                 px: self.scale,
                 font_index: 0,
             });
-            for i in 0..bitmap.len() {
-                let a = bitmap[i];
-                if a != 0 {
+            for (i, alpha) in bitmap.iter().enumerate() {
+                if alpha != &0 {
                     let x = ((i % meta.width) as f32 + width + x_offset as f32 + meta.xmin as f32)
                         as u32;
                     let y = ((i as f32 / meta.width as f32) + y_offset as f32 + self.scale
                         - meta.height as f32
                         - meta.ymin as f32) as u32;
                     if x < image.width() && y < image.height() {
-                        if a == 255 {
+                        if alpha == &255 {
                             image.put_pixel(x, y, image::Rgba([color.0, color.1, color.2, 255]));
                         } else {
                             image
                                 .get_pixel_mut(x, y)
-                                .blend(&image::Rgba([color.0, color.1, color.2, a]));
+                                .blend(&image::Rgba([color.0, color.1, color.2, *alpha]));
                         }
                     }
                 }

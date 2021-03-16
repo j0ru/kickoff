@@ -1,7 +1,6 @@
 use crate::color::Color;
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
-use toml;
 use xdg::BaseDirectories;
 
 use serde::Deserialize;

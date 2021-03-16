@@ -171,13 +171,13 @@ impl DData {
             query: "".to_string(),
             action: None,
             modifiers: ModifiersState::default(),
-            clipboard: clipboard,
+            clipboard,
         }
     }
 }
 
 pub fn register_inputs(
-    seats: &Vec<Attached<wl_seat::WlSeat>>,
+    seats: &[Attached<wl_seat::WlSeat>],
     event_loop: &calloop::EventLoop<DData>,
 ) {
     for seat in seats {
@@ -202,15 +202,14 @@ pub fn register_inputs(
             )
         }) {
             if has_kbd {
-                match map_keyboard_repeat(
+                if let Err(err) = map_keyboard_repeat(
                     event_loop.handle(),
                     &seat,
                     None,
                     RepeatKind::System,
                     move |event, _, ddata| process_keyboard_event(event, ddata),
                 ) {
-                    Err(err) => eprintln!("Failed to map keyboard on seat {} : {:?}.", name, err),
-                    Ok(_) => (),
+                    eprintln!("Failed to map keyboard on seat {} : {:?}.", name, err)
                 }
             }
         }
@@ -224,16 +223,13 @@ fn process_pointer_event(event: PEvent, mut data: DispatchData) {
         clipboard,
         ..
     } = data.get::<DData>().unwrap();
-    match event {
-        PEvent::Button { button, state, .. } => {
-            if button == 274 && state == ButtonState::Pressed {
-                if let Ok(txt) = clipboard.load_primary() {
-                    query.push_str(&txt);
-                    *action = Some(Action::Search);
-                }
+    if let PEvent::Button { button, state, .. } = event {
+        if button == 274 && state == ButtonState::Pressed {
+            if let Ok(txt) = clipboard.load_primary() {
+                query.push_str(&txt);
+                *action = Some(Action::Search);
             }
         }
-        _ => (),
     }
 }
 
@@ -257,14 +253,11 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             ..
         } => {
             if modifiers.ctrl {
-                match (state, keysym) {
-                    (KeyState::Pressed, keysyms::XKB_KEY_v) => {
-                        if let Ok(txt) = clipboard.load() {
-                            query.push_str(&txt);
-                            *action = Some(Action::Search);
-                        }
-                    }
-                    _ => (),
+                if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
+                    (state, keysym, clipboard.load())
+                {
+                    query.push_str(&txt);
+                    *action = Some(Action::Search);
                 }
             } else {
                 match (state, keysym) {

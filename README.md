@@ -1,6 +1,7 @@
 <h1 align="center">
-  <img src="assets/logo.svg" width="200" height="200" alt="logo">
+  <img src="assets/logo.svg" width="300" height="300" alt="logo">
 </h1>
+
 # A simple and uncomplicated program launcher for wayland
 
 Kickoff is heavily inspired by rofi, but not without changes made.

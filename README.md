@@ -1,4 +1,4 @@
-![logo](assets/logo.svg | width=40)
+![logo](assets/logo.svg =100x100)
 # A simple and uncomplicated program launcher for wayland
 
 Kickoff is heavily inspired by rofi, but not without changes made.

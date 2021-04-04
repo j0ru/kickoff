@@ -2,8 +2,6 @@
   <img src="assets/logo.svg" width="300" height="300" alt="logo">
 </h1>
 
-# A simple and uncomplicated program launcher for wayland
-
 Kickoff is heavily inspired by rofi, but not without changes made.
 Like many programs, kickoff was born from an itch that no existing program seemed to relieve and my desire to learn a lower level programming language.
 

@@ -1,3 +1,8 @@
+<h1 align="center">
+  <a href="https://github.com/j0ru/kickoff"><img src="assets/logo.png" alt="Kickoff"></a>
+  <br>
+</h1>
+
 # A simple and uncomplicated program launcher for wayland
 
 Kickoff is heavily inspired by rofi, but not without changes made.

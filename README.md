@@ -1,9 +1,7 @@
-<h1 align="center">
-  <a href="https://github.com/j0ru/kickoff"><img src="assets/logo.svg" alt="Kickoff" style="max-width: 40%"></a>
-  <br>
-</h1>
+![logo](assets/logo.svg | width=40)
+# A simple and uncomplicated program launcher for wayland
 
-Kickoff is heavily inspired by rofi-run, but not without changes made.
+Kickoff is heavily inspired by rofi, but not without changes made.
 Like many programs, kickoff was born from an itch that no existing program seemed to relieve and my desire to learn a lower level programming language.
 
 [![AUR version](https://img.shields.io/aur/version/kickoff?label=Kickoff&logo=arch-linux&style=for-the-badge)](https://aur.archlinux.org/packages/kickoff/)

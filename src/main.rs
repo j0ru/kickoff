@@ -114,6 +114,7 @@ pub fn main() {
                 Action::Search => {
                     need_redraw = true;
                     matched_exe = fuzzy_sort(&applications, query, &history);
+                    select_query = false;
                     selection = 0;
                     if matched_exe.is_empty() {
                         select_query = true

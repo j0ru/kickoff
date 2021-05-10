@@ -71,7 +71,7 @@ pub fn main() {
     let surface = env.create_surface().detach();
     let mut surface = gui::Surface::new(None, surface, &layer_shell, pools);
 
-    let mut event_loop = calloop::EventLoop::<DData>::new().unwrap();
+    let mut event_loop = calloop::EventLoop::<DData>::try_new().unwrap();
     WaylandSource::new(queue)
         .quick_insert(event_loop.handle())
         .unwrap();

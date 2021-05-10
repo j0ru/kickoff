@@ -1,6 +1,6 @@
 [package]
 name = "kickoff"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
 description = "Fast and minimal program launcher"
@@ -10,22 +10,22 @@ repository = "https://github.com/j0ru/kickoff"
 readme = "README.md"
 
 [dependencies]
-wayland-client = "0.28.2"
-smithay-client-toolkit = "0.12.0"
-fontdue = "0.4.0"
-image = "0.23.11"
-fuzzy-matcher = "*"
-nix = "0.19.1"
+wayland-client = "0.28.5"
+smithay-client-toolkit = "0.14.0"
+fontdue = "0.5.0"
+image = "0.23.14"
+fuzzy-matcher = "0.3.7"
+nix = "0.20.0"
 shellwords = "1.1.0"
-css-color = "0.1"
+css-color = "0.1.1"
 exec = "0.3.1"
 xdg = "2.2.0"
 font-loader = "0.11.0"
 toml = "0.5.8"
-serde = { version = "1.0.118", features = ["derive"] }
-hex = "0.4.2"
-futures = "0.3.8"
-smithay-clipboard = "0.6.2"
+serde = { version = "1.0.125", features = ["derive"] }
+hex = "0.4.3"
+futures = "0.3.14"
+smithay-clipboard = "0.6.3"
 
 [profile.release]
 lto = true

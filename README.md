@@ -11,11 +11,13 @@ Like many programs, kickoff was born from an itch that no existing program seeme
 
 ## How does it search
 
-At the moment the path is read and non-recursively filtered for executable files. Other locations are still up for discussion.
+All programs found in $PATH are included in the search results.
+This can include your own additions to $PATH as long as they
+are done before you launch kickoff or the program that launches kickoff
+(i.e. your window manager)
 
-## State
-
-This project is still in heavy development and code quality as well as test coverage are in dire need of improvement. But it is usable and I will try not to break _too_ much between releases ;-)
+This list is then combined with your previous searches and sorted by amount of usage
+and if it fits the search query.
 
 ## Features
 
@@ -31,7 +33,7 @@ This project is still in heavy development and code quality as well as test cove
 A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/config.toml`
 or can be found [here](https://github.com/j0ru/kickoff/blob/main/assets/default_config.toml).
 
-## Roadmap (very incomplete and in no special order)
+## Roadmap
 
-- Speed improvements
+- include aliases in search results
 - Testing and documentation

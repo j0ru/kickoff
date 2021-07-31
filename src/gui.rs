@@ -9,6 +9,7 @@ use smithay_client_toolkit::{
         client::{Attached, DispatchData, Display, Main},
         protocols::wlr::unstable::layer_shell::v1::client::{
             zwlr_layer_shell_v1, zwlr_layer_surface_v1,
+            zwlr_layer_surface_v1::KeyboardInteractivity,
         },
     },
     seat::{
@@ -68,7 +69,7 @@ impl Surface {
         layer_surface.set_anchor(zwlr_layer_surface_v1::Anchor::all());
 
         // Enable Keyboard interactivity
-        layer_surface.set_keyboard_interactivity(1);
+        layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
 
         let next_render_event = Rc::new(Cell::new(None::<RenderEvent>));
         let next_render_event_handle = Rc::clone(&next_render_event);

@@ -52,7 +52,7 @@ impl Font {
         let mut width = 0.;
         for letter in text.chars() {
             let (meta, bitmap) = self.render_glyph(GlyphRasterConfig {
-                c: letter,
+                glyph_index: self.font.lookup_glyph_index(letter) as u16,
                 px: self.scale,
                 font_index: 0,
             });

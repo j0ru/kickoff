@@ -16,10 +16,15 @@ use std::os::unix::fs::PermissionsExt;
 use std::{cmp, env, fs, process};
 
 use log::error;
-use nix::unistd::{fork, ForkResult};
+use nix::{
+    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
+    unistd::{fork, ForkResult},
+};
 use notify_rust::Notification;
 use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
 use std::error::Error;
+use std::time::Duration;
+use tokio::task::JoinHandle;
 
 mod color;
 mod config;
@@ -38,6 +43,16 @@ default_environment!(Env,
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    if let Some(child_handle) = run().await? {
+        /* wait for check if comand exec was successful
+           and history has been written
+        */
+        child_handle.await?;
+    }
+    Ok(())
+}
+
+async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     TermLogger::init(
         LevelFilter::Warn,
         LogConfig::default(),
@@ -67,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let history = history_handle.await?.unwrap_or_default();
+    let mut history = history_handle.await?.unwrap_or_default();
     let mut applications = applications_handle.await?.unwrap();
     for app in history.keys() {
         applications.push(app.to_string());
@@ -163,18 +178,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     };
                     if let Ok(mut args) = shellwords::split(&query) {
                         match unsafe { fork() } {
-                            Ok(ForkResult::Parent { .. }) => {
-                                let mut history = history.clone();
-                                history.insert(
-                                    query.to_string(),
-                                    history.get(&query).unwrap_or(&0) + 1,
-                                );
-                                match history::commit_history(&history) {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        error!("{}", e.to_string())
+                            Ok(ForkResult::Parent { child }) => {
+                                return Ok(Some(tokio::spawn(async move {
+                                    tokio::time::sleep(Duration::new(1, 0)).await;
+                                    match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                                        Ok(WaitStatus::StillAlive)
+                                        | Ok(WaitStatus::Exited(_, 0)) => {
+                                            history.insert(
+                                                query.to_string(),
+                                                history.get(&query).unwrap_or(&0) + 1,
+                                            );
+                                            match history::commit_history(&history) {
+                                                Ok(_) => {}
+                                                Err(e) => {
+                                                    error!("{}", e.to_string())
+                                                }
+                                            };
+                                        }
+                                        Ok(_) => {
+                                            /* Every non 0 statuscode holds no information since it's
+                                            origin can be the started application or a file not found error.
+                                            In either case the error has already been logged and does not
+                                            need to be handled here. */
+                                        }
+                                        Err(err) => error!("{}", err),
                                     }
-                                };
+                                })));
                             }
                             Ok(ForkResult::Child) => {
                                 let err = exec::Command::new(args.remove(0)).args(&args).exec();
@@ -184,7 +213,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 Notification::new()
                                     .summary("Kickoff")
                                     .body(&format!("{}", err))
-                                    .timeout(5)
+                                    .timeout(5000)
                                     .show()?;
                                 process::exit(2);
                             }
@@ -279,7 +308,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         display.flush().unwrap();
         event_loop.dispatch(None, &mut data).unwrap();
     }
-    Ok(())
+    Ok(None)
 }
 
 fn get_executable_names() -> Option<Vec<String>> {

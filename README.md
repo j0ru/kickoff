@@ -38,5 +38,3 @@ or can be found [here](https://github.com/j0ru/kickoff/blob/main/assets/default_
 - Include aliases in search results
 - Testing and documentation
 - Dmenu like parsing of stdin
-- Log errors when program can't be launched
-- Send notification when program can't be launched

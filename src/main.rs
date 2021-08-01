@@ -1,3 +1,4 @@
+use crate::gui::{Action, DData, RenderEvent};
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
@@ -14,10 +15,11 @@ use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
 use std::{cmp, env, fs, process};
 
-use crate::gui::{Action, DData, RenderEvent};
-use futures::executor::block_on;
-use futures::join;
+use log::error;
 use nix::unistd::{fork, ForkResult};
+use notify_rust::Notification;
+use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
+use std::error::Error;
 
 mod color;
 mod config;
@@ -34,23 +36,39 @@ default_environment!(Env,
     ],
 );
 
-pub fn main() {
-    let maybe_config = config::Config::load();
-    if let Err(e) = maybe_config {
-        println!("{}", e);
-        process::exit(1);
-    }
-    let config = maybe_config.unwrap();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    TermLogger::init(
+        LevelFilter::Warn,
+        LogConfig::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
+
+    let config = match config::Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            error!("{}", e);
+            process::exit(1);
+        }
+    };
+
+    let applications_handle = { tokio::spawn(async move { get_executable_names() }) };
+    let history_handle = {
+        let config = config.clone();
+        tokio::spawn(async move { history::get_history(config.history.decrease_interval) })
+    };
+    let font_handle = {
+        let config = config.clone();
+        tokio::spawn(async move { font::Font::new(&config.font, config.font_size) })
+    };
 
     let (env, display, queue) =
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let (maybe_history, maybe_applications, mut font) =
-        block_on(get_history_and_executables_and_font(&config));
-
-    let history = maybe_history.unwrap_or_default();
-    let mut applications = maybe_applications.unwrap();
+    let history = history_handle.await?.unwrap_or_default();
+    let mut applications = applications_handle.await?.unwrap();
     for app in history.keys() {
         applications.push(app.to_string());
     }
@@ -83,6 +101,8 @@ pub fn main() {
     let mut data = DData::new(&display);
     let mut selection = 0;
     let mut select_query = false;
+
+    let mut font = font_handle.await?;
 
     loop {
         let gui::DData { query, action, .. } = &mut data;
@@ -152,16 +172,24 @@ pub fn main() {
                                 match history::commit_history(&history) {
                                     Ok(_) => {}
                                     Err(e) => {
-                                        println!("{}", e.to_string())
+                                        error!("{}", e.to_string())
                                     }
                                 };
                             }
                             Ok(ForkResult::Child) => {
                                 let err = exec::Command::new(args.remove(0)).args(&args).exec();
-                                println!("Error: {}", err);
+
+                                // Won't be executed when exec was successful
+                                error!("{}", err);
+                                Notification::new()
+                                    .summary("Kickoff")
+                                    .body(&format!("{}", err))
+                                    .timeout(5)
+                                    .show()?;
+                                process::exit(2);
                             }
-                            Err(_) => {
-                                println!("failed to fork");
+                            Err(err) => {
+                                error!("{}", err);
                             }
                         }
                         break;
@@ -174,7 +202,6 @@ pub fn main() {
         if need_redraw {
             need_redraw = false;
 
-            // TODO: move this mess to it's own function
             let mut img = ImageBuffer::from_pixel(
                 surface.dimensions.0,
                 surface.dimensions.1,
@@ -243,7 +270,7 @@ pub fn main() {
             match surface.draw(&img) {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     need_redraw = false;
                 }
             };
@@ -252,23 +279,10 @@ pub fn main() {
         display.flush().unwrap();
         event_loop.dispatch(None, &mut data).unwrap();
     }
+    Ok(())
 }
 
-async fn get_history_and_executables_and_font(
-    config: &config::Config,
-) -> (
-    Option<HashMap<String, usize>>,
-    Option<Vec<String>>,
-    font::Font,
-) {
-    join!(
-        history::get_history_async(config.history.decrease_interval),
-        get_executable_names(),
-        font::Font::new_async(&config.font, config.font_size)
-    )
-}
-
-async fn get_executable_names() -> Option<Vec<String>> {
+fn get_executable_names() -> Option<Vec<String>> {
     let var = match env::var_os("PATH") {
         Some(var) => var,
         None => return None,
@@ -305,11 +319,9 @@ fn fuzzy_sort<'a>(
         .iter()
         .map(|x| {
             (
-                if let Some(score) = matcher.fuzzy_match(&x, &pattern) {
-                    Some(score + *pre_scored.get(x).unwrap_or(&1) as i64)
-                } else {
-                    None
-                },
+                matcher
+                    .fuzzy_match(&x, &pattern)
+                    .map(|score| score + *pre_scored.get(x).unwrap_or(&1) as i64),
                 x,
             )
         })

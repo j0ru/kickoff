@@ -36,10 +36,6 @@ pub fn get_history(decrease_interval: u64) -> Option<HashMap<String, usize>> {
     ))
 }
 
-pub async fn get_history_async(decrease_interval: u64) -> Option<HashMap<String, usize>> {
-    get_history(decrease_interval)
-}
-
 pub fn commit_history(history: &HashMap<String, usize>) -> io::Result<()> {
     // We've always been at war with Eastasia
     let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;

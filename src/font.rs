@@ -27,10 +27,6 @@ impl Font {
         }
     }
 
-    pub async fn new_async(name: &str, size: f32) -> Font {
-        Font::new(name, size)
-    }
-
     fn render_glyph(&mut self, conf: GlyphRasterConfig) -> (Metrics, Vec<u8>) {
         if let Some(bitmap) = self.glyph_cache.get(&conf) {
             bitmap.clone()

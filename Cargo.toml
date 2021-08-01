@@ -26,6 +26,10 @@ serde = { version = "1.0.127", features = ["derive"] }
 hex = "0.4.3"
 futures = "0.3.16"
 smithay-clipboard = "0.6.4"
+log = "0.4.14"
+simplelog = "0.10.0"
+tokio =  { version = "1.9.0", features = ["full"] }
+notify-rust = "4"
 
 [profile.release]
 lto = true

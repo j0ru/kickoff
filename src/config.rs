@@ -5,7 +5,7 @@ use xdg::BaseDirectories;
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct ColorConfig {
     pub background: Color,
@@ -15,13 +15,13 @@ pub struct ColorConfig {
     pub prompt: Color,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct HistoryConfig {
     pub decrease_interval: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
     pub prompt: String,

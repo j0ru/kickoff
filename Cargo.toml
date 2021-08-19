@@ -8,6 +8,7 @@ license = "GPL-3.0-or-later"
 homepage = "https://github.com/j0ru/kickoff"
 repository = "https://github.com/j0ru/kickoff"
 readme = "README.md"
+keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
 wayland-client = "0.29.0"

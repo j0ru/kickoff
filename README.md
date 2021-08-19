@@ -9,6 +9,22 @@ Like many programs, kickoff was born from an itch that no existing program seeme
 [![AUR git version](https://img.shields.io/aur/version/kickoff-git?label=kickoff-git&logo=arch-linux&style=for-the-badge)](https://aur.archlinux.org/packages/kickoff-git/)
 ![screenshot](assets/screenshot.png)
 
+## Install
+
+#### Arch Linux
+
+Use your favourite AUR manager, i.e. [blinky](https://github.com/cherti/blinky/):
+
+```bash
+blinky -S kickoff
+```
+
+#### Cargo
+
+```bash
+cargo install kickoff
+```
+
 ## How does it search
 
 All programs found in $PATH are included in the search results.

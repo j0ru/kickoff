@@ -262,7 +262,8 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                 }
             } else {
                 match (state, keysym) {
-                    (KeyState::Pressed, keysyms::XKB_KEY_BackSpace) => {
+                    (KeyState::Pressed, keysyms::XKB_KEY_BackSpace)
+                    | (KeyState::Pressed, keysyms::XKB_KEY_Delete) => {
                         query.pop();
                         *action = Some(Action::Search);
                     }
@@ -292,7 +293,7 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
         }
         KbEvent::Modifiers { modifiers: m } => *modifiers = m,
         KbEvent::Repeat { keysym, utf8, .. } => match keysym {
-            keysyms::XKB_KEY_BackSpace => {
+            keysyms::XKB_KEY_BackSpace | keysyms::XKB_KEY_Delete => {
                 query.pop();
                 *action = Some(Action::Search);
             }

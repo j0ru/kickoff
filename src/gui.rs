@@ -263,20 +263,24 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             } else {
                 match (state, keysym) {
                     (KeyState::Pressed, keysyms::XKB_KEY_BackSpace)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_Delete) => {
+                    | (KeyState::Pressed, keysyms::XKB_KEY_Delete)
+                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Delete) => {
                         query.pop();
                         *action = Some(Action::Search);
                     }
                     (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
                         *action = Some(Action::Complete);
                     }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Return) => {
+                    (KeyState::Pressed, keysyms::XKB_KEY_Return)
+                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Enter) => {
                         *action = Some(Action::Execute);
                     }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Up) => {
+                    (KeyState::Pressed, keysyms::XKB_KEY_Up)
+                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Up) => {
                         *action = Some(Action::NavUp);
                     }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Down) => {
+                    (KeyState::Pressed, keysyms::XKB_KEY_Down)
+                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Down) => {
                         *action = Some(Action::NavDown);
                     }
                     (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {

@@ -70,12 +70,13 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     let applications_handle = { tokio::spawn(async move { get_executable_names() }) };
     let history_handle = {
-        let config = config.clone();
-        tokio::spawn(async move { history::get_history(config.history.decrease_interval) })
+        let decrease_interval = config.history.decrease_interval;
+        tokio::spawn(async move { history::get_history(decrease_interval) })
     };
     let font_handle = {
-        let config = config.clone();
-        tokio::spawn(async move { font::Font::new(&config.font, config.font_size) })
+        let font = config.font.clone();
+        let font_size = config.font_size;
+        tokio::spawn(async move { font::Font::new(&font, font_size) })
     };
 
     let (env, display, queue) =

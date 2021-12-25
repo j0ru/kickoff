@@ -31,6 +31,7 @@ mod config;
 mod font;
 mod gui;
 mod history;
+mod keybinds;
 
 default_environment!(Env,
     fields = [
@@ -226,6 +227,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     }
                 }
                 Action::Exit => break,
+                _ => {}
             }
         }
 

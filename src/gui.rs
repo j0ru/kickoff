@@ -29,6 +29,8 @@ use std::rc::Rc;
 
 use image::RgbaImage;
 
+use crate::keybinds::Keybindings;
+
 #[derive(PartialEq, Copy, Clone)]
 pub enum RenderEvent {
     Configure { width: u32, height: u32 },
@@ -149,13 +151,16 @@ impl Drop for Surface {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum Action {
     Execute,
     Exit,
-    Search,
     Complete,
     NavUp,
     NavDown,
+    Search,
+    Delete,
+    Paste,
 }
 
 pub struct DData {
@@ -242,6 +247,7 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
         clipboard,
         ..
     } = data.get::<DData>().unwrap();
+    let keybindings = Keybindings::default(); // TODO: replace by values from config
     match event {
         KbEvent::Enter { .. } => {}
         KbEvent::Leave { .. } => {
@@ -253,69 +259,43 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             utf8,
             ..
         } => {
-            if modifiers.ctrl {
-                if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
-                    (state, keysym, clipboard.load())
-                {
+            if state == KeyState::Pressed {
+                if let Some(a) = keybindings.get(modifiers, keysym) {
+                    match a {
+                        &Action::Delete => {
+                            query.pop();
+                            *action = Some(Action::Search)
+                        }
+                        &Action::Paste => {
+                            if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
+                                (state, keysym, clipboard.load())
+                            {
+                                query.push_str(&txt);
+                                *action = Some(Action::Search);
+                            }
+                        }
+                        a => *action = Some(a.to_owned()),
+                    }
+                } else if let Some(txt) = utf8 {
                     query.push_str(&txt);
                     *action = Some(Action::Search);
-                }
-            } else {
-                match (state, keysym) {
-                    (KeyState::Pressed, keysyms::XKB_KEY_BackSpace)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_Delete)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Delete) => {
-                        query.pop();
-                        *action = Some(Action::Search);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Tab) => {
-                        *action = Some(Action::Complete);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Return)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Enter) => {
-                        *action = Some(Action::Execute);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Up)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Up) => {
-                        *action = Some(Action::NavUp);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Down)
-                    | (KeyState::Pressed, keysyms::XKB_KEY_KP_Down) => {
-                        *action = Some(Action::NavDown);
-                    }
-                    (KeyState::Pressed, keysyms::XKB_KEY_Escape) => {
-                        *action = Some(Action::Exit);
-                    }
-                    _ => {
-                        if let Some(txt) = utf8 {
-                            query.push_str(&txt);
-                            *action = Some(Action::Search);
-                        }
-                    }
                 }
             }
         }
         KbEvent::Modifiers { modifiers: m } => *modifiers = m,
-        KbEvent::Repeat { keysym, utf8, .. } => match keysym {
-            keysyms::XKB_KEY_BackSpace | keysyms::XKB_KEY_Delete => {
-                query.pop();
+        KbEvent::Repeat { keysym, utf8, .. } => {
+            if let Some(a) = keybindings.get(modifiers, keysym) {
+                match a {
+                    &Action::Delete => {
+                        query.pop();
+                        *action = Some(Action::Search)
+                    }
+                    a => *action = Some(a.to_owned()),
+                }
+            } else if let Some(txt) = utf8 {
+                query.push_str(&txt);
                 *action = Some(Action::Search);
             }
-            keysyms::XKB_KEY_Tab => {
-                *action = Some(Action::Complete);
-            }
-            keysyms::XKB_KEY_Up => {
-                *action = Some(Action::NavUp);
-            }
-            keysyms::XKB_KEY_Down => {
-                *action = Some(Action::NavDown);
-            }
-            _ => {
-                if let Some(txt) = utf8 {
-                    query.push_str(&txt);
-                    *action = Some(Action::Search);
-                }
-            }
-        },
+        }
     }
 }

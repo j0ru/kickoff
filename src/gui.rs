@@ -65,7 +65,7 @@ impl Surface {
             "launcher".to_owned(),
         );
 
-        // Anchor to the top left corner of the output
+        // Anchor to all corners of the output to archive fullscreen
         layer_surface.set_anchor(zwlr_layer_surface_v1::Anchor::all());
 
         // Enable Keyboard interactivity

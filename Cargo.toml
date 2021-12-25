@@ -12,13 +12,13 @@ keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
 wayland-client = "0.29.0"
-smithay-client-toolkit = "0.14.0"
+smithay-client-toolkit = "0.15.2"
 fontdue = "0.5.2"
 image = "0.23.14"
 fuzzy-matcher = "0.3.7"
-nix = "0.22.0"
+nix = "0.23.1"
 shellwords = "1.1.0"
-css-color = "0.1.1"
+css-color = "0.2.4"
 exec = "0.3.1"
 xdg = "2.2.0"
 font-loader = "0.11.0"
@@ -28,8 +28,8 @@ hex = "0.4.3"
 futures = "0.3.16"
 smithay-clipboard = "0.6.4"
 log = "0.4.14"
-simplelog = "0.10.0"
-tokio =  { version = "1.9.0", features = ["full"] }
+simplelog = "0.11.1"
+tokio = { version = "1.9.0", features = ["full"] }
 notify-rust = "4"
 
 [profile.release]

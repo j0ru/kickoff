@@ -1,13 +1,44 @@
 use crate::gui::Action;
-use smithay_client_toolkit::seat::keyboard::{keysyms, ModifiersState};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer};
+use smithay_client_toolkit::seat::keyboard::ModifiersState;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::{Hash, Hasher};
+use x11_keysymdef::lookup_by_name;
+
+use crate::config::Config;
 
 pub struct Keybindings {
     inner: HashMap<KeyCombo, Action>,
 }
 
-struct Modifiers(ModifiersState);
+impl From<Config> for Keybindings {
+    fn from(config: Config) -> Self {
+        let mut res = Keybindings {
+            inner: HashMap::new(),
+        };
+
+        res.add_key_combos(Action::Complete, &config.keybindings.complete);
+        res.add_key_combos(Action::Execute, &config.keybindings.execute);
+        res.add_key_combos(Action::Exit, &config.keybindings.exit);
+        res.add_key_combos(Action::Delete, &config.keybindings.delete);
+        res.add_key_combos(Action::NavUp, &config.keybindings.nav_up);
+        res.add_key_combos(Action::NavDown, &config.keybindings.nav_down);
+        res.add_key_combos(Action::Paste, &config.keybindings.paste);
+
+        res
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct Modifiers(ModifiersState);
+
+impl From<ModifiersState> for Modifiers {
+    fn from(modifiers: ModifiersState) -> Self {
+        Modifiers(modifiers)
+    }
+}
 
 impl Hash for Modifiers {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -19,6 +50,7 @@ impl Hash for Modifiers {
         self.0.num_lock.hash(state);
     }
 }
+
 impl PartialEq for Modifiers {
     fn eq(&self, other: &Modifiers) -> bool {
         self.0.ctrl == other.0.ctrl
@@ -31,8 +63,8 @@ impl PartialEq for Modifiers {
 }
 impl Eq for Modifiers {}
 
-#[derive(Eq, PartialEq, Hash)]
-struct KeyCombo {
+#[derive(Eq, PartialEq, Hash, Clone, fmt::Debug)]
+pub struct KeyCombo {
     modifiers: Modifiers,
     key: u32,
 }
@@ -44,100 +76,62 @@ impl Keybindings {
             key: keysym,
         })
     }
+
+    fn add_key_combos(&mut self, action: Action, key_combos: &[KeyCombo]) {
+        key_combos.iter().for_each(|entry| {
+            self.inner.insert(entry.to_owned(), action);
+        });
+    }
 }
 
-impl Default for Keybindings {
-    fn default() -> Self {
-        Keybindings {
-            inner: HashMap::from([
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Delete,
-                    },
-                    Action::Delete,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_BackSpace,
-                    },
-                    Action::Delete,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_KP_Delete,
-                    },
-                    Action::Delete,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Tab,
-                    },
-                    Action::Complete,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Return,
-                    },
-                    Action::Execute,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_KP_Enter,
-                    },
-                    Action::Execute,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Up,
-                    },
-                    Action::NavUp,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_KP_Up,
-                    },
-                    Action::NavUp,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Down,
-                    },
-                    Action::NavDown,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_KP_Down,
-                    },
-                    Action::NavDown,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState::default()),
-                        key: keysyms::XKB_KEY_Escape,
-                    },
-                    Action::Exit,
-                ),
-                (
-                    KeyCombo {
-                        modifiers: Modifiers(ModifiersState {
-                            ctrl: true,
-                            ..ModifiersState::default()
-                        }),
-                        key: keysyms::XKB_KEY_v,
-                    },
-                    Action::Paste,
-                ),
-            ]),
+impl KeyCombo {
+    pub fn new(modifiers: Modifiers, key: u32) -> Self {
+        KeyCombo { modifiers, key }
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyCombo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(KeyComboVisitor)
+    }
+}
+
+struct KeyComboVisitor;
+impl<'de> Visitor<'de> for KeyComboVisitor {
+    type Value = KeyCombo;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("assignments of key combinations")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let mut modifiers = ModifiersState::default();
+        let mut key: Option<u32> = None;
+        value.split("+").for_each(|s| match s {
+            "ctrl" => modifiers.ctrl = true,
+            "shift" => modifiers.shift = true,
+            "num_lock" => modifiers.num_lock = true,
+            "caps_lock" => modifiers.caps_lock = true,
+            "alt" => modifiers.alt = true,
+            "logo" => modifiers.logo = true,
+            s => {
+                if let Some(value) = lookup_by_name(s) {
+                    key = Some(value.keysym);
+                }
+            }
+        });
+        if let Some(key) = key {
+            Ok(KeyCombo {
+                modifiers: Modifiers(modifiers),
+                key,
+            })
+        } else {
+            Err(de::Error::custom("No key given or unable to parse"))
         }
     }
 }

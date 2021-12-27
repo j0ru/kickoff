@@ -1,4 +1,7 @@
 use crate::color::Color;
+use crate::keybinds::{KeyCombo, Modifiers};
+use smithay_client_toolkit::seat::keyboard::{keysyms, ModifiersState};
+use std::fmt::Debug;
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
 use xdg::BaseDirectories;
@@ -13,6 +16,18 @@ pub struct ColorConfig {
     pub text_query: Color,
     pub text_selected: Color,
     pub prompt: Color,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct KeybindingsConfig {
+    pub delete: Vec<KeyCombo>,
+    pub execute: Vec<KeyCombo>,
+    pub paste: Vec<KeyCombo>,
+    pub complete: Vec<KeyCombo>,
+    pub nav_up: Vec<KeyCombo>,
+    pub nav_down: Vec<KeyCombo>,
+    pub exit: Vec<KeyCombo>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -30,6 +45,41 @@ pub struct Config {
     pub font_size: f32,
     pub colors: ColorConfig,
     pub history: HistoryConfig,
+    pub keybindings: KeybindingsConfig,
+}
+
+impl Default for KeybindingsConfig {
+    fn default() -> Self {
+        KeybindingsConfig {
+            delete: vec![
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_BackSpace),
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Delete),
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Delete),
+            ],
+            execute: vec![
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Return),
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Enter),
+            ],
+            paste: vec![KeyCombo::new(
+                ModifiersState {
+                    ctrl: true,
+                    ..ModifiersState::default()
+                }
+                .into(),
+                keysyms::XKB_KEY_v,
+            )],
+            complete: vec![KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Tab)],
+            nav_up: vec![
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Up),
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Up),
+            ],
+            nav_down: vec![
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Down),
+                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Down),
+            ],
+            exit: vec![KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Escape)],
+        }
+    }
 }
 impl Default for ColorConfig {
     fn default() -> Self {
@@ -51,6 +101,7 @@ impl Default for Config {
             font_size: 32.,
             colors: ColorConfig::default(),
             history: HistoryConfig::default(),
+            keybindings: KeybindingsConfig::default(),
         }
     }
 }

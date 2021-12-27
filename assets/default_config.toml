@@ -6,16 +6,27 @@ prompt = ''
 # space between window border and the content in pixel
 padding = 100
 
-font = ''  # otf or ttf only
+font = ''        # otf or ttf only
 font_size = 32.0
 
 [history]
-decrease_interval = 48       # interval to decrease the number of launches
+decrease_interval = 48 # interval to decrease the number of launches
 
 [colors]
 # color format: rgb or rgba, if transparency is desired
 background = '#282c34aa'
 prompt = '#abb2bfff'
-text = '#ffffffff'           # for search results
-text_query = '#e5c07bff'     # for the search query
-text_selected = '#61afefff'  # for the currently selected result
+text = '#ffffffff'          # for search results
+text_query = '#e5c07bff'    # for the search query
+text_selected = '#61afefff' # for the currently selected result
+
+[keybindings]
+# keybindings syntax: ctrl/shift/alt/num_lock/caps_lock/logo as modifiers and a key joined by '+' signs
+# A list of available keys can be found here: https://docs.rs/crate/x11-keysymdef/0.2.0/source/src/keysym.json
+paste = ["ctrl+v"]
+execute = ["KP_Enter", "Return"]
+delete = ["KP_Delete", "Delete", "BackSpace"]
+complete = ["Tab"]
+nav_up = ["Up"]
+nav_down = ["Down"]
+exit = ["Escape"]

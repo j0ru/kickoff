@@ -115,7 +115,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     let mut matched_exe: Vec<&String> = applications.iter().collect();
     let mut need_redraw = false;
-    let mut data = DData::new(&display);
+    let mut data = DData::new(&display, config.clone().into());
     let mut selection = 0;
     let mut select_query = false;
 

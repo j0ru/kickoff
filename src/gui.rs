@@ -168,16 +168,18 @@ pub struct DData {
     pub action: Option<Action>,
     pub modifiers: ModifiersState,
     pub clipboard: Clipboard,
+    keybindings: Keybindings,
 }
 
 impl DData {
-    pub fn new(display: &Display) -> DData {
+    pub fn new(display: &Display, keybindings: Keybindings) -> DData {
         let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
         DData {
             query: "".to_string(),
             action: None,
             modifiers: ModifiersState::default(),
             clipboard,
+            keybindings,
         }
     }
 }
@@ -245,9 +247,9 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
         action,
         modifiers,
         clipboard,
+        keybindings,
         ..
     } = data.get::<DData>().unwrap();
-    let keybindings = Keybindings::default(); // TODO: replace by values from config
     match event {
         KbEvent::Enter { .. } => {}
         KbEvent::Leave { .. } => {
@@ -277,7 +279,12 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                         a => *action = Some(a.to_owned()),
                     }
                 } else if let Some(txt) = utf8 {
-                    query.push_str(&txt);
+                    let t_sanitized = txt
+                        .chars()
+                        .filter(|c| c.is_ascii() && !c.is_ascii_control())
+                        .collect::<String>();
+
+                    query.push_str(&t_sanitized);
                     *action = Some(Action::Search);
                 }
             }

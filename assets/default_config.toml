@@ -21,7 +21,7 @@ text_query = '#e5c07bff'    # for the search query
 text_selected = '#61afefff' # for the currently selected result
 
 [keybindings]
-# keybindings syntax: ctrl/shift/alt/num_lock/caps_lock/logo as modifiers and a key joined by '+' signs
+# keybindings syntax: ctrl/shift/alt/caps_lock/logo as modifiers and a key joined by '+' signs
 # A list of available keys can be found here: https://docs.rs/crate/x11-keysymdef/0.2.0/source/src/keysym.json
 paste = ["ctrl+v"]
 execute = ["KP_Enter", "Return"]

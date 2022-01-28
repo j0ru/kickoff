@@ -23,7 +23,7 @@ impl From<Config> for Keybindings {
         res.add_key_combos(Action::Execute, &config.keybindings.execute);
         res.add_key_combos(Action::Exit, &config.keybindings.exit);
         res.add_key_combos(Action::Delete, &config.keybindings.delete);
-        res.add_key_combos(Action::DeleteAll, &config.keybindings.delete_all);
+        res.add_key_combos(Action::DeleteWord, &config.keybindings.delete_word);
         res.add_key_combos(Action::NavUp, &config.keybindings.nav_up);
         res.add_key_combos(Action::NavDown, &config.keybindings.nav_down);
         res.add_key_combos(Action::Paste, &config.keybindings.paste);

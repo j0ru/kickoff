@@ -26,6 +26,7 @@ text_selected = '#61afefff' # for the currently selected result
 paste = ["ctrl+v"]
 execute = ["KP_Enter", "Return"]
 delete = ["KP_Delete", "Delete", "BackSpace"]
+delete_all = ["ctrl+KP_Delete", "ctrl+Delete", "ctrl+BackSpace"]
 complete = ["Tab"]
 nav_up = ["Up"]
 nav_down = ["Down"]

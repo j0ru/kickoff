@@ -45,7 +45,6 @@ impl Hash for Modifiers {
         self.0.alt.hash(state);
         self.0.shift.hash(state);
         self.0.ctrl.hash(state);
-        self.0.caps_lock.hash(state);
         self.0.logo.hash(state);
     }
 }
@@ -55,7 +54,6 @@ impl PartialEq for Modifiers {
         self.0.ctrl == other.0.ctrl
             && self.0.alt == other.0.alt
             && self.0.shift == other.0.shift
-            && self.0.caps_lock == other.0.caps_lock
             && self.0.logo == other.0.logo
     }
 }
@@ -113,7 +111,6 @@ impl<'de> Visitor<'de> for KeyComboVisitor {
         value.split("+").for_each(|s| match s {
             "ctrl" => modifiers.ctrl = true,
             "shift" => modifiers.shift = true,
-            "caps_lock" => modifiers.caps_lock = true,
             "alt" => modifiers.alt = true,
             "logo" => modifiers.logo = true,
             s => {

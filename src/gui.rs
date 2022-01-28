@@ -160,7 +160,7 @@ pub enum Action {
     NavDown,
     Search,
     Delete,
-    DeleteAll,
+    DeleteWord,
     Paste,
 }
 
@@ -269,11 +269,11 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                             query.pop();
                             *action = Some(Action::Search)
                         }
-                        &Action::DeleteAll => {
+                        &Action::DeleteWord => {
                             query.pop();
                             loop {
-                                let removedChar = query.pop();
-                                if removedChar.unwrap_or(' ') == ' ' {
+                                let removed_char = query.pop();
+                                if removed_char.unwrap_or(' ') == ' ' {
                                     break;
                                 }
                             }
@@ -308,11 +308,11 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                         query.pop();
                         *action = Some(Action::Search)
                     }
-                    &Action::DeleteAll => {
+                    &Action::DeleteWord => {
                         query.pop();
                         loop {
-                            let removedChar = query.pop();
-                            if removedChar.unwrap_or(' ') == ' ' {
+                            let removed_char = query.pop();
+                            if removed_char.unwrap_or(' ') == ' ' {
                                 break;
                             }
                         }

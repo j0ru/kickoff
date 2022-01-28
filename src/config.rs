@@ -22,7 +22,7 @@ pub struct ColorConfig {
 #[serde(default)]
 pub struct KeybindingsConfig {
     pub delete: Vec<KeyCombo>,
-    pub delete_all: Vec<KeyCombo>,
+    pub delete_word: Vec<KeyCombo>,
     pub execute: Vec<KeyCombo>,
     pub paste: Vec<KeyCombo>,
     pub complete: Vec<KeyCombo>,
@@ -57,7 +57,7 @@ impl Default for KeybindingsConfig {
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Delete),
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Delete),
             ],
-            delete_all: vec![
+            delete_word: vec![
                 KeyCombo::new(
                     ModifiersState {
                         ctrl: true,

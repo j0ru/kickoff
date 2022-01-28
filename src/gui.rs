@@ -160,6 +160,7 @@ pub enum Action {
     NavDown,
     Search,
     Delete,
+    DeleteAll,
     Paste,
 }
 
@@ -268,6 +269,16 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                             query.pop();
                             *action = Some(Action::Search)
                         }
+                        &Action::DeleteAll => {
+                            query.pop();
+                            loop {
+                                let removedChar = query.pop();
+                                if removedChar.unwrap_or(' ') == ' ' {
+                                    break;
+                                }
+                            }
+                            *action = Some(Action::Search)
+                        }
                         &Action::Paste => {
                             if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
                                 (state, keysym, clipboard.load())
@@ -295,6 +306,16 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                 match a {
                     &Action::Delete => {
                         query.pop();
+                        *action = Some(Action::Search)
+                    }
+                    &Action::DeleteAll => {
+                        query.pop();
+                        loop {
+                            let removedChar = query.pop();
+                            if removedChar.unwrap_or(' ') == ' ' {
+                                break;
+                            }
+                        }
                         *action = Some(Action::Search)
                     }
                     a => *action = Some(a.to_owned()),

@@ -215,13 +215,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                                 // Won't be executed when exec was successful
                                 error!("{}", err);
 
-                                if cfg!(target_os = "linux") {
-                                    Notification::new()
-                                        .summary("Kickoff")
-                                        .body(&format!("{}", err))
-                                        .timeout(5000)
-                                        .show()?;
-                                }
+                                #[cfg(target_os = "linux")]
+                                Notification::new()
+                                    .summary("Kickoff")
+                                    .body(&format!("{}", err))
+                                    .timeout(5000)
+                                    .show()?;
                                 process::exit(2);
                             }
                             Err(err) => {

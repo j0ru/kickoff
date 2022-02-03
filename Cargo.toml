@@ -21,7 +21,6 @@ shellwords = "1.1.0"
 css-color = "0.2.4"
 exec = "0.3.1"
 xdg = "2.2.0"
-font-loader = "0.11.0"
 toml = "0.5.8"
 serde = { version = "1.0.127", features = ["derive"] }
 hex = "0.4.3"
@@ -32,6 +31,7 @@ simplelog = "0.11.1"
 tokio = { version = "1.9.0", features = ["full"] }
 notify-rust = "4"
 x11-keysymdef = "0.2.0"
+fontconfig = "0.2.1"
 
 [profile.release]
 lto = true

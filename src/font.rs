@@ -1,9 +1,10 @@
 use crate::color::Color;
 
 use std::collections::HashMap;
+use std::io::Read;
+use std::fs::File;
 
-use font_loader::system_fonts;
-use font_loader::system_fonts::FontPropertyBuilder;
+use fontconfig::Fontconfig;
 
 use fontdue::{layout::GlyphRasterConfig, FontSettings, Metrics};
 
@@ -17,10 +18,13 @@ pub struct Font {
 
 impl Font {
     pub fn new(name: &str, size: f32) -> Font {
-        let font_builder = FontPropertyBuilder::new().family(name).build();
-        let (font_data, _) = system_fonts::get(&font_builder).unwrap();
+        let fc = Fontconfig::new().expect("Couldn't load fontconfig");
+        let font_path = fc.find(name, None).expect("Couldn't find font").path;
+        let mut font_file = File::open(font_path.to_str().unwrap()).expect("Couldn't load font file");
+        let mut font_buffer = Vec::new();
+        font_file.read_to_end(&mut font_buffer).expect("Couldn't load font file");
         Font {
-            font: fontdue::Font::from_bytes(font_data, FontSettings::default())
+            font: fontdue::Font::from_bytes(font_buffer, FontSettings::default())
                 .expect("Failed to parse Font"),
             scale: size,
             glyph_cache: HashMap::new(),

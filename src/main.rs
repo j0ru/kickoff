@@ -20,11 +20,13 @@ use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
 };
-use notify_rust::Notification;
 use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+
+#[cfg(target_os = "linux")]
+use notify_rust::Notification;
 
 mod color;
 mod config;
@@ -212,11 +214,14 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
                                 // Won't be executed when exec was successful
                                 error!("{}", err);
-                                Notification::new()
-                                    .summary("Kickoff")
-                                    .body(&format!("{}", err))
-                                    .timeout(5000)
-                                    .show()?;
+
+                                if cfg!(target_os = "linux") {
+                                    Notification::new()
+                                        .summary("Kickoff")
+                                        .body(&format!("{}", err))
+                                        .timeout(5000)
+                                        .show()?;
+                                }
                                 process::exit(2);
                             }
                             Err(err) => {

@@ -24,8 +24,6 @@ use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, Termi
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-
-#[cfg(target_os = "linux")]
 use notify_rust::Notification;
 
 mod color;
@@ -215,7 +213,6 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                                 // Won't be executed when exec was successful
                                 error!("{}", err);
 
-                                #[cfg(target_os = "linux")]
                                 Notification::new()
                                     .summary("Kickoff")
                                     .body(&format!("{}", err))

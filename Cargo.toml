@@ -1,6 +1,6 @@
 [package]
 name = "kickoff"
-version = "0.4.5"
+version = "0.5.0"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
 edition = "2018"
 description = "Fast and minimal program launcher"
@@ -14,7 +14,7 @@ keywords = ["wayland", "launcher", "wlroots"]
 wayland-client = "0.29.0"
 smithay-client-toolkit = "0.15.2"
 fontdue = "0.5.2"
-image = "0.23.14"
+image = "0.24.0"
 fuzzy-matcher = "0.3.7"
 nix = "0.23.1"
 shellwords = "1.1.0"

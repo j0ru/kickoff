@@ -190,7 +190,7 @@ pub fn register_inputs(
     event_loop: &calloop::EventLoop<DData>,
 ) {
     for seat in seats {
-        if let Some((has_ptr, _name)) = with_seat_data(&seat, |seat_data| {
+        if let Some((has_ptr, _name)) = with_seat_data(seat, |seat_data| {
             (
                 seat_data.has_pointer && !seat_data.defunct,
                 seat_data.name.clone(),
@@ -204,7 +204,7 @@ pub fn register_inputs(
     }
 
     for seat in seats {
-        if let Some((has_kbd, name)) = with_seat_data(&seat, |seat_data| {
+        if let Some((has_kbd, name)) = with_seat_data(seat, |seat_data| {
             (
                 seat_data.has_keyboard && !seat_data.defunct,
                 seat_data.name.clone(),
@@ -213,7 +213,7 @@ pub fn register_inputs(
             if has_kbd {
                 if let Err(err) = map_keyboard_repeat(
                     event_loop.handle(),
-                    &seat,
+                    seat,
                     None,
                     RepeatKind::System,
                     move |event, _, ddata| process_keyboard_event(event, ddata),

@@ -69,7 +69,7 @@ pub struct KeyCombo {
 impl Keybindings {
     pub fn get(&self, modifiers: &ModifiersState, keysym: u32) -> Option<&Action> {
         self.inner.get(&KeyCombo {
-            modifiers: Modifiers(modifiers.clone()),
+            modifiers: Modifiers(*modifiers),
             key: keysym,
         })
     }
@@ -109,7 +109,7 @@ impl<'de> Visitor<'de> for KeyComboVisitor {
     {
         let mut modifiers = ModifiersState::default();
         let mut key: Option<u32> = None;
-        value.split("+").for_each(|s| match s {
+        value.split('+').for_each(|s| match s {
             "ctrl" => modifiers.ctrl = true,
             "shift" => modifiers.shift = true,
             "alt" => modifiers.alt = true,

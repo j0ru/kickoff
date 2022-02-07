@@ -64,7 +64,7 @@ fn encode_history(history: &HashMap<String, usize>) -> String {
         if n > &0 {
             res.push_str(&n.to_string());
             res.push(' ');
-            res.push_str(&p);
+            res.push_str(p);
             res.push('\n');
         }
     }

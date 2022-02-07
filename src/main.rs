@@ -260,7 +260,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &config.colors.text_query
                 };
                 font.render(
-                    &query,
+                    query,
                     color,
                     &mut img,
                     config.padding + prompt_width,
@@ -289,7 +289,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &config.colors.text
                 };
                 font.render(
-                    &matched,
+                    matched,
                     color,
                     &mut img,
                     config.padding,
@@ -353,7 +353,7 @@ fn fuzzy_sort<'a>(
         .map(|x| {
             (
                 matcher
-                    .fuzzy_match(&x, &pattern)
+                    .fuzzy_match(x, pattern)
                     .map(|score| score + *pre_scored.get(x).unwrap_or(&1) as i64),
                 x,
             )

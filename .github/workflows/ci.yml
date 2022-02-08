@@ -31,22 +31,18 @@ jobs:
           command: clippy
           args: -- -D warnings
 
-  testfreebsd:
+  freebsd:
     runs-on: macos-10.15
-    env:
-      MYTOKEN : ${{ secrets.MYTOKEN }}
-      MYTOKEN2: "value2"
     steps:
     - uses: actions/checkout@v2
     - name: Test in FreeBSD
-      id: test
       uses: vmactions/freebsd-vm@v0.1.5
       with:
         usesh: true
         prepare: |
           pwd
-          ls -lah
-          pkg install -y fontconfig pkgconf
+          ls -lah work
+          pkg install -y fontconfig pkgconf curl
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable --profile minimal
           rustup component add clippy
         run: |

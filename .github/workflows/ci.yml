@@ -40,11 +40,6 @@ jobs:
       with:
         usesh: true
         prepare: |
-          pwd
-          ls -lah work/
-          pkg install -y fontconfig pkgconf curl
-          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable --profile minimal
-          source $HOME/.cargo/env
-          rustup component add clippy
-        run: |
-          cargo clippy -- -D warnings
+          pkg install -y fontconfig pkgconf rustc
+          cd work/kickoff
+        run: cargo build --release

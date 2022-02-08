@@ -40,6 +40,6 @@ jobs:
       with:
         usesh: true
         prepare: |
-          pkg install -y fontconfig pkgconf rustc
+          pkg install -y fontconfig pkgconf rust
           cd work/kickoff
         run: cargo build --release

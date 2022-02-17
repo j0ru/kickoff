@@ -30,16 +30,3 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-
-  freebsd:
-    runs-on: macos-10.15
-    steps:
-    - uses: actions/checkout@v2
-    - name: Test in FreeBSD
-      uses: vmactions/freebsd-vm@v0.1.5
-      with:
-        usesh: true
-        prepare: |
-          pkg install -y fontconfig pkgconf rust
-          cd work/kickoff
-        run: cargo build --release

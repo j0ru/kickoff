@@ -1,0 +1,8 @@
+task:
+  name: FreeBSD (shortest)
+  freebsd_instance:
+    matrix:
+      image_family: freebsd-14-snap
+  install_script: pkg install -y fontconfig pkgconf rust
+  script: |
+    cargo build --release

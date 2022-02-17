@@ -20,11 +20,11 @@ use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
 };
+use notify_rust::Notification;
 use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use notify_rust::Notification;
 
 mod color;
 mod config;

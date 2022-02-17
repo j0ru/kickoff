@@ -24,6 +24,11 @@ pub struct Font {
 impl Font {
     pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Font> {
         let fc = Fontconfig::new().expect("Couldn't load fontconfig");
+        let font_names = if font_names.len() == 0 {
+            vec![String::new()]
+        } else {
+            font_names
+        };
         let font_paths: Vec<PathBuf> = font_names
             .iter()
             .map(|name| fc.find(name, None).unwrap().path)

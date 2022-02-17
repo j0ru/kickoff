@@ -1,11 +1,14 @@
 use crate::color::Color;
-use fontdue::layout::{GlyphRasterConfig, LayoutSettings, TextStyle, CoordinateSystem, Layout};
+use fontdue::layout::{CoordinateSystem, GlyphRasterConfig, Layout, LayoutSettings, TextStyle};
 use fontdue::Metrics;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use tokio::{fs::File, io::{self, AsyncReadExt}};
+use tokio::{
+    fs::File,
+    io::{self, AsyncReadExt},
+};
 
 use fontconfig::Fontconfig;
 
@@ -21,10 +24,10 @@ pub struct Font {
 impl Font {
     pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Font> {
         let fc = Fontconfig::new().expect("Couldn't load fontconfig");
-        let font_paths: Vec<PathBuf> = vec![font_names
+        let font_paths: Vec<PathBuf> = font_names
             .iter()
             .map(|name| fc.find(name, None).unwrap().path)
-            .collect()];
+            .collect();
         let mut font_data = Vec::new();
 
         for font_path in font_paths {
@@ -72,7 +75,19 @@ impl Font {
         let mut width = 0;
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
-        layout.append(&self.fonts, &TextStyle::new(text, self.scale, 0));
+        for c in text.chars() {
+            let mut font_index = 0;
+            for (i, font) in self.fonts.iter().enumerate() {
+                if font.lookup_glyph_index(c) != 0 {
+                    font_index = i;
+                    break;
+                }
+            }
+            layout.append(
+                &self.fonts,
+                &TextStyle::new(&c.to_string(), self.scale, font_index),
+            );
+        }
 
         for glyph in layout.glyphs() {
             let (_, bitmap) = self.render_glyph(glyph.key);

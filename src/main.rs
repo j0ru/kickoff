@@ -74,10 +74,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         let decrease_interval = config.history.decrease_interval;
         tokio::spawn(async move { history::get_history(decrease_interval) })
     };
-    let font_handle = {
-        let font = config.font.clone();
-        let font_size = config.font_size;
-        tokio::spawn(async move { font::Font::new(&font, font_size) })
+    let font = if let Some(font_name) = config.font {
+        let mut font_names = config.fonts.clone();
+        font_names.insert(0, font_name);
+        font::Font::new(font_names, config.font_size)
+    } else {
+        font::Font::new(config.fonts, config.font_size)
     };
 
     let (env, display, queue) =
@@ -115,11 +117,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     let mut matched_exe: Vec<&String> = applications.iter().collect();
     let mut need_redraw = false;
-    let mut data = DData::new(&display, config.clone().into());
+    let mut data = DData::new(&display, config.keybindings.clone().into());
     let mut selection = 0;
     let mut select_query = false;
-
-    let mut font = font_handle.await?;
+    let mut font = font.await?;
 
     loop {
         let gui::DData { query, action, .. } = &mut data;

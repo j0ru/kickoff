@@ -7,26 +7,26 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use x11_keysymdef::lookup_by_name;
 
-use crate::config::Config;
+use crate::config::KeybindingsConfig;
 
 pub struct Keybindings {
     inner: HashMap<KeyCombo, Action>,
 }
 
-impl From<Config> for Keybindings {
-    fn from(config: Config) -> Self {
+impl From<KeybindingsConfig> for Keybindings {
+    fn from(config: KeybindingsConfig) -> Self {
         let mut res = Keybindings {
             inner: HashMap::new(),
         };
 
-        res.add_key_combos(Action::Complete, &config.keybindings.complete);
-        res.add_key_combos(Action::Execute, &config.keybindings.execute);
-        res.add_key_combos(Action::Exit, &config.keybindings.exit);
-        res.add_key_combos(Action::Delete, &config.keybindings.delete);
-        res.add_key_combos(Action::DeleteWord, &config.keybindings.delete_word);
-        res.add_key_combos(Action::NavUp, &config.keybindings.nav_up);
-        res.add_key_combos(Action::NavDown, &config.keybindings.nav_down);
-        res.add_key_combos(Action::Paste, &config.keybindings.paste);
+        res.add_key_combos(Action::Complete, &config.complete);
+        res.add_key_combos(Action::Execute, &config.execute);
+        res.add_key_combos(Action::Exit, &config.exit);
+        res.add_key_combos(Action::Delete, &config.delete);
+        res.add_key_combos(Action::DeleteWord, &config.delete_word);
+        res.add_key_combos(Action::NavUp, &config.nav_up);
+        res.add_key_combos(Action::NavDown, &config.nav_down);
+        res.add_key_combos(Action::Paste, &config.paste);
 
         res
     }

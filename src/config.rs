@@ -42,7 +42,8 @@ pub struct HistoryConfig {
 pub struct Config {
     pub prompt: String,
     pub padding: u32,
-    pub font: String,
+    pub font: Option<String>,
+    pub fonts: Vec<String>,
     pub font_size: f32,
     pub colors: ColorConfig,
     pub history: HistoryConfig,
@@ -124,7 +125,8 @@ impl Default for Config {
         Config {
             prompt: "".to_owned(),
             padding: 100,
-            font: "".to_owned(),
+            font: None,
+            fonts: vec![],
             font_size: 32.,
             colors: ColorConfig::default(),
             history: HistoryConfig::default(),

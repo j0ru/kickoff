@@ -24,7 +24,7 @@ pub struct Font {
 impl Font {
     pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Font> {
         let fc = Fontconfig::new().expect("Couldn't load fontconfig");
-        let font_names = if font_names.len() == 0 {
+        let font_names = if font_names.is_empty() {
             vec![String::new()]
         } else {
             font_names

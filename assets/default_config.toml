@@ -6,7 +6,8 @@ prompt = ''
 # space between window border and the content in pixel
 padding = 100
 
-font = ''        # otf or ttf only
+# font = ''        # has been deprecated in favour of fonts list
+fonts = ['Noto Sans Mono']     # list of otf or ttf fonts. later elements work as fallback
 font_size = 32.0
 
 [history]

@@ -1,4 +1,6 @@
+use std::path::PathBuf;
 use crate::gui::{Action, DData, RenderEvent};
+use crate::config::Config;
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
@@ -25,6 +27,7 @@ use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, Termi
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use clap::Parser;
 
 mod color;
 mod config;
@@ -41,6 +44,13 @@ default_environment!(Env,
         zwlr_layer_shell_v1::ZwlrLayerShellV1 => layer_shell
     ],
 );
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+struct Args {
+    #[clap(short, long)]
+    config: Option<PathBuf>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -61,7 +71,9 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         ColorChoice::Auto,
     )?;
 
-    let config = match config::Config::load() {
+    let args = Args::parse();
+
+    let config = match Config::load(args.config) {
         Ok(c) => c,
         Err(e) => {
             error!("{}", e);
@@ -359,11 +371,10 @@ fn fuzzy_sort<'a>(
                 x,
             )
         })
+        .filter(|x| x.0.is_some())
         .collect::<Vec<(Option<i64>, &String)>>();
     executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
     executables
-        .into_iter()
-        .filter(|x| x.0.is_some())
         .into_iter()
         .map(|x| x.1)
         .collect()

@@ -143,9 +143,12 @@ impl Default for HistoryConfig {
 }
 
 impl Config {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(config_path: Option<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
         let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
-        if let Some(config_file) = xdg_dirs.find_config_file("config.toml") {
+        if let Some(config_file) = config_path {
+            let content = read_to_string(config_file)?;
+            Ok(toml::from_str(&content)?)
+        } else if let Some(config_file) = xdg_dirs.find_config_file("config.toml") {
             let content = read_to_string(config_file)?;
             Ok(toml::from_str(&content)?)
         } else {

@@ -23,7 +23,6 @@ use nix::{
     unistd::{fork, ForkResult},
 };
 use notify_rust::Notification;
-use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
 use std::error::Error;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -64,12 +63,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
-    TermLogger::init(
-        LevelFilter::Warn,
-        LogConfig::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    env_logger::init();
 
     let args = Args::parse();
 

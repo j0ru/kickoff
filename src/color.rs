@@ -10,9 +10,9 @@ pub struct Color(pub u8, pub u8, pub u8, pub u8);
 impl From<css_color::Rgba> for Color {
     fn from(c: css_color::Rgba) -> Self {
         Color(
-            (c.red * 255.) as u8,
-            (c.green * 255.) as u8,
-            (c.blue * 255.) as u8,
+            (c.red * 255. * c.alpha) as u8,
+            (c.green * 255. * c.alpha) as u8,
+            (c.blue * 255. * c.alpha) as u8,
             (c.alpha * 255.) as u8,
         )
     }

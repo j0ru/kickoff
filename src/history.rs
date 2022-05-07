@@ -1,72 +1,89 @@
 extern crate xdg;
 
-use std::cmp::max;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{read_to_string, write};
-use std::io;
-use std::time::SystemTime;
+use std::error::Error;
+use std::path::PathBuf;
 use xdg::BaseDirectories;
 
-pub fn get_history(decrease_interval: u64) -> Option<HashMap<String, usize>> {
-    let xdg_dirs = BaseDirectories::with_prefix("kickoff").ok()?;
-    let cache_file = xdg_dirs.find_cache_file("run.cache")?;
-
-    let metadata = cache_file.metadata().unwrap();
-    let last_modified = metadata.modified().unwrap();
-
-    // calculates how many iterations of the interval has happend since last modification
-    let interval_diff = if decrease_interval > 0 {
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            / (3600 * decrease_interval)
-            - last_modified
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                / (3600 * decrease_interval)
-    } else {
-        0
-    };
-
-    Some(decode_history(
-        &read_to_string(cache_file).ok()?,
-        interval_diff,
-    ))
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub name: String,
+    pub num_used: usize,
 }
 
-pub fn commit_history(history: &HashMap<String, usize>) -> io::Result<()> {
-    // We've always been at war with Eastasia
-    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
-    let cache_file = xdg_dirs.place_cache_file("run.cache")?;
-    write(cache_file, encode_history(history))
+#[derive(Debug)]
+pub struct History {
+    entries: Vec<HistoryEntry>,
 }
 
-fn decode_history(content: &str, substract: u64) -> HashMap<String, usize> {
-    let mut res = HashMap::new();
-    for line in content.lines() {
-        let words = line.splitn(2, ' ').collect::<Vec<&str>>();
-        match (words.get(1), words.get(0)) {
-            (Some(p), Some(n)) => {
-                let launches = n.parse().unwrap_or(1);
-                res.insert(p.to_string(), max(launches - substract as i64, 0) as usize)
-            }
-            _ => None,
-        };
+impl History {
+    pub fn as_vec(&self) -> &Vec<HistoryEntry> {
+        &self.entries
     }
-    res
-}
 
-fn encode_history(history: &HashMap<String, usize>) -> String {
-    let mut res = String::new();
-    for (p, n) in history.iter() {
-        if n > &0 {
-            res.push_str(&n.to_string());
-            res.push(' ');
-            res.push_str(p);
-            res.push('\n');
+    pub async fn load(path: Option<PathBuf>) -> Result<Self, Box<dyn Error>> {
+        // TODO: make actually async
+        let mut res = History {
+            entries: Vec::new(),
+        };
+        let history_file = if let Some(path) = path {
+            path
+        } else {
+            let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+            if let Some(path) = xdg_dirs.find_cache_file("default.csv") {
+                path
+            } else {
+                return Ok(History {
+                    entries: Vec::new(),
+                });
+            }
+        };
+
+        let mut rdr = csv::Reader::from_path(history_file).unwrap();
+        for result in rdr.deserialize() {
+            let record: HistoryEntry = result?;
+            res.entries.push(record);
+        }
+
+        Ok(res)
+    }
+
+    pub fn inc(&mut self, name: &str) {
+        if let Some(entry) = self.entries.iter_mut().find(|x| x.name == name) {
+            entry.num_used = entry.num_used + 1;
+        } else {
+            self.entries.push(HistoryEntry {
+                name: name.to_owned(),
+                num_used: 1,
+            })
         }
     }
-    res
+
+    pub async fn save(&self, path: Option<PathBuf>) -> Result<(), std::io::Error> {
+        // TODO: make actually async
+        let history_file = if let Some(path) = path {
+            path
+        } else {
+            let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+            xdg_dirs.place_cache_file("default.csv")?
+        };
+
+        let mut wtr = csv::Writer::from_path(history_file)?;
+        for entry in &self.entries {
+            wtr.serialize(entry)?;
+        }
+        wtr.flush()?;
+
+        Ok(())
+    }
+
+    pub fn as_hashmap(&self) -> HashMap<String, usize> {
+        let mut res = HashMap::new();
+        for entry in self.entries.iter() {
+            res.insert(entry.name.to_owned(), entry.num_used);
+        }
+
+        res
+    }
 }

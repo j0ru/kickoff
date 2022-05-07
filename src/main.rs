@@ -1,6 +1,14 @@
-use std::path::PathBuf;
-use crate::gui::{Action, DData, RenderEvent};
 use crate::config::Config;
+use crate::gui::{Action, DData, RenderEvent};
+use clap::Parser;
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use image::ImageBuffer;
+use log::error;
+use nix::{
+    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
+    unistd::{fork, ForkResult},
+};
+use notify_rust::Notification;
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
@@ -8,25 +16,8 @@ use smithay_client_toolkit::{
     reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
-
-use image::ImageBuffer;
-
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
-use std::collections::HashMap;
-use std::os::unix::fs::PermissionsExt;
-use std::{cmp, env, fs, process};
-
-use log::error;
-use nix::{
-    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
-    unistd::{fork, ForkResult},
-};
-use notify_rust::Notification;
-use std::error::Error;
-use std::time::Duration;
+use std::{cmp, collections::HashMap, error::Error, path::PathBuf, process, time::Duration};
 use tokio::task::JoinHandle;
-use clap::Parser;
 
 mod color;
 mod config;
@@ -34,6 +25,7 @@ mod font;
 mod gui;
 mod history;
 mod keybinds;
+mod selection;
 
 default_environment!(Env,
     fields = [
@@ -47,8 +39,21 @@ default_environment!(Env,
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
+    /// Use config at custom path
     #[clap(short, long)]
     config: Option<PathBuf>,
+
+    /// Read list from stdin instead of PATH
+    #[clap(long)]
+    stdin: bool,
+
+    /// Output selection to stdout instead of executing it
+    #[clap(long)]
+    stdout: bool,
+
+    /// Set custom history name. Default history will only be used if stdin is not set
+    #[clap(long)]
+    history: Option<String>,
 }
 
 #[tokio::main]
@@ -75,11 +80,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let applications_handle = { tokio::spawn(async move { get_executable_names() }) };
-    let history_handle = {
-        let decrease_interval = config.history.decrease_interval;
-        tokio::spawn(async move { history::get_history(decrease_interval) })
+    let mut elems = if args.stdin {
+        selection::ElementList::from_stdin().await?
+    } else {
+        selection::ElementList::from_path().await?
     };
+
     let font = if let Some(font_name) = config.font {
         let mut font_names = config.fonts.clone();
         font_names.insert(0, font_name);
@@ -92,20 +98,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let mut history = history_handle.await?.unwrap_or_default();
-    let mut applications = applications_handle.await?.unwrap();
-    for app in history.keys() {
-        applications.push(app.to_string());
-    }
+    let mut history_file = history::History::load(None).await?;
+    elems.merge_history(&history_file);
+    elems.sort();
 
-    applications.sort();
-    applications.dedup();
-    applications.sort_by(|a, b| {
-        history
-            .get(b)
-            .unwrap_or(&0)
-            .cmp(history.get(a).unwrap_or(&0))
-    });
+    let history = history_file.as_hashmap();
+    let applications = elems.as_value_list();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env
@@ -193,14 +191,11 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                                     match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                                         Ok(WaitStatus::StillAlive)
                                         | Ok(WaitStatus::Exited(_, 0)) => {
-                                            history.insert(
-                                                query.to_string(),
-                                                history.get(&query).unwrap_or(&0) + 1,
-                                            );
-                                            match history::commit_history(&history) {
-                                                Ok(_) => {}
+                                            history_file.inc(&query);
+                                            match history_file.save(None).await {
+                                                Ok(()) => {}
                                                 Err(e) => {
-                                                    error!("{}", e.to_string())
+                                                    error!("{}", e);
                                                 }
                                             };
                                         }
@@ -322,33 +317,6 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     Ok(None)
 }
 
-fn get_executable_names() -> Option<Vec<String>> {
-    let var = match env::var_os("PATH") {
-        Some(var) => var,
-        None => return None,
-    };
-
-    let mut res: Vec<String> = Vec::new();
-
-    let paths_iter = env::split_paths(&var);
-    let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
-
-    for dir in dirs_iter {
-        let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
-            if let Ok(metadata) = file.metadata() {
-                return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
-            }
-            false
-        });
-
-        for exe in executables_iter {
-            res.push(exe.file_name().to_str().unwrap().to_string());
-        }
-    }
-
-    Some(res)
-}
-
 fn fuzzy_sort<'a>(
     executables: &'a [String],
     pattern: &str,
@@ -368,8 +336,5 @@ fn fuzzy_sort<'a>(
         .filter(|x| x.0.is_some())
         .collect::<Vec<(Option<i64>, &String)>>();
     executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
-    executables
-        .into_iter()
-        .map(|x| x.1)
-        .collect()
+    executables.into_iter().map(|x| x.1).collect()
 }

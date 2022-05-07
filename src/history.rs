@@ -1,7 +1,6 @@
 extern crate xdg;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use xdg::BaseDirectories;
@@ -51,7 +50,7 @@ impl History {
 
     pub fn inc(&mut self, name: &str) {
         if let Some(entry) = self.entries.iter_mut().find(|x| x.name == name) {
-            entry.num_used = entry.num_used + 1;
+            entry.num_used += 1;
         } else {
             self.entries.push(HistoryEntry {
                 name: name.to_owned(),
@@ -76,14 +75,5 @@ impl History {
         wtr.flush()?;
 
         Ok(())
-    }
-
-    pub fn as_hashmap(&self) -> HashMap<String, usize> {
-        let mut res = HashMap::new();
-        for entry in self.entries.iter() {
-            res.insert(entry.name.to_owned(), entry.num_used);
-        }
-
-        res
     }
 }

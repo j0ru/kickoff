@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
-use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use image::ImageBuffer;
 use log::error;
 use nix::{
@@ -16,7 +15,7 @@ use smithay_client_toolkit::{
     reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
-use std::{cmp, collections::HashMap, error::Error, path::PathBuf, process, time::Duration};
+use std::{cmp, error::Error, path::PathBuf, process, time::Duration};
 use tokio::task::JoinHandle;
 
 mod color;
@@ -80,11 +79,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let mut elems = if args.stdin {
+    let mut apps = if args.stdin {
         selection::ElementList::from_stdin().await?
     } else {
         selection::ElementList::from_path().await?
     };
+    let mut history_file = history::History::load(None).await?;
 
     let font = if let Some(font_name) = config.font {
         let mut font_names = config.fonts.clone();
@@ -98,12 +98,8 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let mut history_file = history::History::load(None).await?;
-    elems.merge_history(&history_file);
-    elems.sort();
-
-    let history = history_file.as_hashmap();
-    let applications = elems.as_value_list();
+    apps.merge_history(&history_file);
+    apps.sort();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env
@@ -119,7 +115,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     gui::register_inputs(&env.get_all_seats(), &event_loop);
 
-    let mut matched_exe: Vec<&String> = applications.iter().collect();
+    let mut matched_exe: Vec<&selection::Element> = apps.search("");
     let mut need_redraw = false;
     let mut data = DData::new(&display, config.keybindings.clone().into());
     let mut selection = 0;
@@ -155,7 +151,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 }
                 Action::Search => {
                     need_redraw = true;
-                    matched_exe = fuzzy_sort(&applications, query, &history);
+                    matched_exe = apps.search(query);
                     select_query = false;
                     selection = 0;
                     if matched_exe.is_empty() {
@@ -165,7 +161,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 Action::Complete => {
                     if !select_query {
                         let app = matched_exe.get(selection).unwrap();
-                        if query == *app {
+                        if query == &app.name {
                             selection = if selection < matched_exe.len() - 1 {
                                 selection + 1
                             } else {
@@ -173,17 +169,17 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                             };
                         }
                         query.clear();
-                        query.push_str(matched_exe.get(selection).unwrap());
+                        query.push_str(&matched_exe.get(selection).unwrap().name);
                         need_redraw = true;
                     }
                 }
                 Action::Execute => {
-                    let query = if select_query {
+                    let command = if select_query {
                         query.to_string()
                     } else {
-                        matched_exe.get(selection).unwrap().to_string()
+                        matched_exe.get(selection).unwrap().value.to_string()
                     };
-                    if let Ok(mut args) = shellwords::split(&query) {
+                    if let Ok(mut args) = shellwords::split(&command) {
                         match unsafe { fork() } {
                             Ok(ForkResult::Parent { child }) => {
                                 return Ok(Some(tokio::spawn(async move {
@@ -191,7 +187,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                                     match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                                         Ok(WaitStatus::StillAlive)
                                         | Ok(WaitStatus::Exited(_, 0)) => {
-                                            history_file.inc(&query);
+                                            history_file.inc(&command);
                                             match history_file.save(None).await {
                                                 Ok(()) => {}
                                                 Err(e) => {
@@ -291,7 +287,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &config.colors.text
                 };
                 font.render(
-                    matched,
+                    &matched.name,
                     color,
                     &mut img,
                     config.padding,
@@ -315,26 +311,4 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         event_loop.dispatch(None, &mut data).unwrap();
     }
     Ok(None)
-}
-
-fn fuzzy_sort<'a>(
-    executables: &'a [String],
-    pattern: &str,
-    pre_scored: &'a HashMap<String, usize>,
-) -> Vec<&'a String> {
-    let matcher = SkimMatcherV2::default();
-    let mut executables = executables
-        .iter()
-        .map(|x| {
-            (
-                matcher
-                    .fuzzy_match(x, pattern)
-                    .map(|score| score + *pre_scored.get(x).unwrap_or(&1) as i64),
-                x,
-            )
-        })
-        .filter(|x| x.0.is_some())
-        .collect::<Vec<(Option<i64>, &String)>>();
-    executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
-    executables.into_iter().map(|x| x.1).collect()
 }

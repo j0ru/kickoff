@@ -4,11 +4,20 @@ use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::{env, fs, os::unix::fs::PermissionsExt};
 use tokio::io::{self, AsyncBufReadExt};
 
-#[derive(Eq, Ord, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Element {
     pub name: String,
     pub value: String,
     pub base_score: usize,
+}
+
+impl Ord for Element {
+    fn cmp(&self, other: &Element) -> Ordering {
+        match other.base_score.cmp(&self.base_score) {
+            Ordering::Equal => self.name.cmp(&other.name),
+            e => e,
+        }
+    }
 }
 
 impl PartialOrd for Element {
@@ -20,26 +29,12 @@ impl PartialOrd for Element {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ElementList {
     inner: Vec<Element>,
 }
 
-impl Default for ElementList {
-    fn default() -> Self {
-        ElementList { inner: Vec::new() }
-    }
-}
-
 impl ElementList {
-    pub fn as_value_list(&self) -> Vec<String> {
-        self.inner
-            .clone()
-            .iter()
-            .map(|elem| elem.value.clone())
-            .collect()
-    }
-
     pub async fn from_path() -> Result<Self, Box<dyn std::error::Error>> {
         // TODO: make async
         let var = env::var("PATH")?;

@@ -14,6 +14,7 @@ pub struct HistoryEntry {
 #[derive(Debug)]
 pub struct History {
     entries: Vec<HistoryEntry>,
+    path: PathBuf,
 }
 
 impl History {
@@ -23,10 +24,7 @@ impl History {
 
     pub async fn load(path: Option<PathBuf>) -> Result<Self, Box<dyn Error>> {
         // TODO: make actually async
-        let mut res = History {
-            entries: Vec::new(),
-        };
-        let history_file = if let Some(path) = path {
+        let history_path = if let Some(path) = path {
             path
         } else {
             let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
@@ -35,11 +33,17 @@ impl History {
             } else {
                 return Ok(History {
                     entries: Vec::new(),
+                    path: xdg_dirs.place_cache_file("default.csv")?,
                 });
             }
         };
 
-        let mut rdr = csv::Reader::from_path(history_file).unwrap();
+        let mut res = History {
+            entries: Vec::new(),
+            path: history_path.clone(),
+        };
+
+        let mut rdr = csv::Reader::from_path(history_path).unwrap();
         for result in rdr.deserialize() {
             let record: HistoryEntry = result?;
             res.entries.push(record);
@@ -59,16 +63,10 @@ impl History {
         }
     }
 
-    pub async fn save(&self, path: Option<PathBuf>) -> Result<(), std::io::Error> {
+    pub async fn save(&self) -> Result<(), std::io::Error> {
         // TODO: make actually async
-        let history_file = if let Some(path) = path {
-            path
-        } else {
-            let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
-            xdg_dirs.place_cache_file("default.csv")?
-        };
 
-        let mut wtr = csv::Writer::from_path(history_file)?;
+        let mut wtr = csv::Writer::from_path(&self.path)?;
         for entry in &self.entries {
             wtr.serialize(entry)?;
         }

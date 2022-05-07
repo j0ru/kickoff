@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
+use history::History;
 use image::ImageBuffer;
 use log::error;
 use nix::{
@@ -52,7 +53,7 @@ struct Args {
 
     /// Set custom history name. Default history will only be used if stdin is not set
     #[clap(long)]
-    history: Option<String>,
+    history: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -84,7 +85,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     } else {
         selection::ElementList::from_path().await?
     };
-    let mut history_file = history::History::load(None).await?;
+    let mut history = History::load(args.history).await?;
 
     let font = if let Some(font_name) = config.font {
         let mut font_names = config.fonts.clone();
@@ -98,7 +99,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    apps.merge_history(&history_file);
+    apps.merge_history(&history);
     apps.sort();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
@@ -174,55 +175,22 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     }
                 }
                 Action::Execute => {
-                    let command = if select_query {
-                        query.to_string()
-                    } else {
-                        matched_exe.get(selection).unwrap().value.to_string()
-                    };
-                    if let Ok(mut args) = shellwords::split(&command) {
-                        match unsafe { fork() } {
-                            Ok(ForkResult::Parent { child }) => {
-                                return Ok(Some(tokio::spawn(async move {
-                                    tokio::time::sleep(Duration::new(1, 0)).await;
-                                    match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
-                                        Ok(WaitStatus::StillAlive)
-                                        | Ok(WaitStatus::Exited(_, 0)) => {
-                                            history_file.inc(&command);
-                                            match history_file.save(None).await {
-                                                Ok(()) => {}
-                                                Err(e) => {
-                                                    error!("{}", e);
-                                                }
-                                            };
-                                        }
-                                        Ok(_) => {
-                                            /* Every non 0 statuscode holds no information since it's
-                                            origin can be the started application or a file not found error.
-                                            In either case the error has already been logged and does not
-                                            need to be handled here. */
-                                        }
-                                        Err(err) => error!("{}", err),
-                                    }
-                                })));
-                            }
-                            Ok(ForkResult::Child) => {
-                                let err = exec::Command::new(args.remove(0)).args(&args).exec();
-
-                                // Won't be executed when exec was successful
-                                error!("{}", err);
-
-                                Notification::new()
-                                    .summary("Kickoff")
-                                    .body(&format!("{}", err))
-                                    .timeout(5000)
-                                    .show()?;
-                                process::exit(2);
-                            }
-                            Err(err) => {
-                                error!("{}", err);
-                            }
+                    let element = if select_query {
+                        selection::Element {
+                            name: query.to_string(),
+                            value: query.to_string(),
+                            base_score: 0,
                         }
-                        break;
+                    } else {
+                        (*matched_exe.get(selection).unwrap()).clone()
+                    };
+                    if args.stdout {
+                        println!("{}", element.value);
+                        history.inc(&element.value);
+                        history.save().await?;
+                        return Ok(None);
+                    } else {
+                        return Ok(Some(exec(element, history)?));
                     }
                 }
                 Action::Exit => break,
@@ -311,4 +279,51 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         event_loop.dispatch(None, &mut data).unwrap();
     }
     Ok(None)
+}
+
+fn exec(
+    elem: selection::Element,
+    mut history: History,
+) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
+    let command = elem.value;
+    let mut args = shellwords::split(&command)?;
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { child }) => {
+            Ok(tokio::spawn(async move {
+                tokio::time::sleep(Duration::new(1, 0)).await;
+                match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                    Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
+                        history.inc(&command);
+                        match history.save().await {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!("{}", e);
+                            }
+                        };
+                    }
+                    Ok(_) => {
+                        /* Every non 0 statuscode holds no information since it's
+                        origin can be the started application or a file not found error.
+                        In either case the error has already been logged and does not
+                        need to be handled here. */
+                    }
+                    Err(err) => error!("{}", err),
+                }
+            }))
+        }
+        Ok(ForkResult::Child) => {
+            let err = exec::Command::new(args.remove(0)).args(&args).exec();
+
+            // Won't be executed when exec was successful
+            error!("{}", err);
+
+            Notification::new()
+                .summary("Kickoff")
+                .body(&format!("{}", err))
+                .timeout(5000)
+                .show()?;
+            process::exit(2);
+        }
+        Err(e) => Err(Box::new(e)),
+    }
 }

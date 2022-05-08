@@ -85,7 +85,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     } else {
         selection::ElementList::from_path().await?
     };
-    let mut history = History::load(args.history).await?;
+    let mut history = History::load(args.history, config.history.decrease_interval).await?;
 
     let font = if let Some(font_name) = config.font {
         let mut font_names = config.fonts.clone();
@@ -116,7 +116,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     gui::register_inputs(&env.get_all_seats(), &event_loop);
 
-    let mut matched_exe: Vec<&selection::Element> = apps.search("");
+    let mut search_results = apps.as_ref_vec();
     let mut need_redraw = false;
     let mut data = DData::new(&display, config.keybindings.clone().into());
     let mut selection = 0;
@@ -144,33 +144,33 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if select_query && !matched_exe.is_empty() {
+                    if select_query && !search_results.is_empty() {
                         select_query = false;
-                    } else if !matched_exe.is_empty() && selection < matched_exe.len() - 1 {
+                    } else if !search_results.is_empty() && selection < search_results.len() - 1 {
                         selection += 1;
                     }
                 }
                 Action::Search => {
                     need_redraw = true;
-                    matched_exe = apps.search(query);
+                    search_results = apps.search(query);
                     select_query = false;
                     selection = 0;
-                    if matched_exe.is_empty() {
+                    if search_results.is_empty() {
                         select_query = true
                     }
                 }
                 Action::Complete => {
                     if !select_query {
-                        let app = matched_exe.get(selection).unwrap();
+                        let app = search_results.get(selection).unwrap();
                         if query == &app.name {
-                            selection = if selection < matched_exe.len() - 1 {
+                            selection = if selection < search_results.len() - 1 {
                                 selection + 1
                             } else {
                                 selection
                             };
                         }
                         query.clear();
-                        query.push_str(&matched_exe.get(selection).unwrap().name);
+                        query.push_str(&search_results.get(selection).unwrap().name);
                         need_redraw = true;
                     }
                 }
@@ -182,10 +182,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                             base_score: 0,
                         }
                     } else {
-                        (*matched_exe.get(selection).unwrap()).clone()
+                        (*search_results.get(selection).unwrap()).clone()
                     };
                     if args.stdout {
-                        println!("{}", element.value);
+                        print!("{}", element.value);
                         history.inc(&element.value);
                         history.save().await?;
                         return Ok(None);
@@ -243,10 +243,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 0
             };
 
-            for (i, matched) in matched_exe
+            for (i, matched) in search_results
                 .iter()
                 .enumerate()
-                .take(cmp::min(max_entries + offset, matched_exe.len()))
+                .take(cmp::min(max_entries + offset, search_results.len()))
                 .skip(offset)
             {
                 let color = if i == selection && !select_query {

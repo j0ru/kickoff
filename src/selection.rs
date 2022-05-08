@@ -1,4 +1,4 @@
-use crate::history;
+use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::{env, fs, os::unix::fs::PermissionsExt};
@@ -86,7 +86,7 @@ impl ElementList {
         self.inner.sort();
     }
 
-    pub fn merge_history(&mut self, history: &history::History) {
+    pub fn merge_history(&mut self, history: &History) {
         for entry in history.as_vec().iter() {
             if let Some(elem) = self.inner.iter_mut().find(|x| x.name == entry.name) {
                 elem.base_score = entry.num_used;
@@ -117,5 +117,9 @@ impl ElementList {
             .collect::<Vec<(Option<i64>, &Element)>>();
         executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
         executables.into_iter().map(|x| x.1).collect()
+    }
+
+    pub fn as_ref_vec(&self) -> Vec<&Element> {
+        self.inner.iter().collect()
     }
 }

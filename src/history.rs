@@ -3,6 +3,7 @@ extern crate xdg;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use xdg::BaseDirectories;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,7 +23,10 @@ impl History {
         &self.entries
     }
 
-    pub async fn load(path: Option<PathBuf>) -> Result<Self, Box<dyn Error>> {
+    pub async fn load(
+        path: Option<PathBuf>,
+        decrease_interval: u64,
+    ) -> Result<Self, Box<dyn Error>> {
         // TODO: make actually async
         let history_path = if let Some(path) = path {
             path
@@ -43,9 +47,26 @@ impl History {
             path: history_path.clone(),
         };
 
+        let last_modified = history_path.metadata()?.modified()?;
+        let interval_diff = if decrease_interval > 0 {
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                / (3600 * decrease_interval)
+                - last_modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    / (3600 * decrease_interval)
+        } else {
+            0
+        };
+
         let mut rdr = csv::Reader::from_path(history_path).unwrap();
         for result in rdr.deserialize() {
-            let record: HistoryEntry = result?;
+            let mut record: HistoryEntry = result?;
+            record.num_used -= interval_diff as usize;
             res.entries.push(record);
         }
 

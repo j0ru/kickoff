@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
+use futures::future::Either;
 use history::History;
 use image::ImageBuffer;
 use log::error;
@@ -80,12 +81,17 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let mut apps = if args.stdin {
-        selection::ElementList::from_stdin().await?
+    let apps = if args.stdin {
+        Either::Left(selection::ElementList::from_stdin())
     } else {
-        selection::ElementList::from_path().await?
+        Either::Right(selection::ElementList::from_path())
     };
-    let mut history = History::load(args.history, config.history.decrease_interval).await?;
+
+    let history = {
+        let path = args.history.clone();
+        let decrease_interval = config.history.decrease_interval;
+        tokio::task::spawn_blocking(move || History::load(path, decrease_interval))
+    };
 
     let font = if let Some(font_name) = config.font {
         let mut font_names = config.fonts.clone();
@@ -99,6 +105,8 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
+    let mut history = history.await??;
+    let mut apps = apps.await?;
     apps.merge_history(&history);
     apps.sort();
 
@@ -187,7 +195,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     if args.stdout {
                         print!("{}", element.value);
                         history.inc(&element.value);
-                        history.save().await?;
+                        history.save()?;
                         return Ok(None);
                     } else {
                         return Ok(Some(exec(element, history)?));
@@ -294,7 +302,7 @@ fn exec(
                 match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                     Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
                         history.inc(&command);
-                        match history.save().await {
+                        match history.save() {
                             Ok(()) => {}
                             Err(e) => {
                                 error!("{}", e);

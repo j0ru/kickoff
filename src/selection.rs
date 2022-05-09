@@ -1,7 +1,8 @@
 use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use std::{env, fs, os::unix::fs::PermissionsExt};
+use std::error::Error;
+use std::{env, os::unix::fs::PermissionsExt};
 use tokio::io::{self, AsyncBufReadExt};
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -35,14 +36,20 @@ pub struct ElementList {
 }
 
 impl ElementList {
-    pub async fn from_path() -> Result<Self, Box<dyn std::error::Error>> {
-        // TODO: make async
+    pub async fn from_path() -> Result<Self, Box<dyn Error>> {
+        match tokio::task::spawn_blocking(ElementList::fetch_list).await? {
+            Ok(list) => Ok(list),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn fetch_list() -> Result<Self, Box<dyn Error + Send + Sync>> {
         let var = env::var("PATH")?;
 
         let mut res = ElementList::default();
 
         let paths_iter = env::split_paths(&var);
-        let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
+        let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
 
         for dir in dirs_iter {
             let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
@@ -65,7 +72,7 @@ impl ElementList {
         Ok(res)
     }
 
-    pub async fn from_stdin() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn from_stdin() -> Result<Self, Box<dyn Error>> {
         let stdin = io::stdin();
         let reader = io::BufReader::new(stdin);
         let mut lines = reader.lines();

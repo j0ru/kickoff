@@ -1,7 +1,6 @@
 extern crate xdg;
 
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::path::PathBuf;
 use std::time::SystemTime;
 use xdg::BaseDirectories;
@@ -23,11 +22,7 @@ impl History {
         &self.entries
     }
 
-    pub async fn load(
-        path: Option<PathBuf>,
-        decrease_interval: u64,
-    ) -> Result<Self, Box<dyn Error>> {
-        // TODO: make actually async
+    pub fn load(path: Option<PathBuf>, decrease_interval: u64) -> Result<Self, std::io::Error> {
         let history_path = if let Some(path) = path {
             path
         } else {
@@ -84,9 +79,7 @@ impl History {
         }
     }
 
-    pub async fn save(&self) -> Result<(), std::io::Error> {
-        // TODO: make actually async
-
+    pub fn save(&self) -> Result<(), std::io::Error> {
         let mut wtr = csv::Writer::from_path(&self.path)?;
         for entry in &self.entries {
             wtr.serialize(entry)?;

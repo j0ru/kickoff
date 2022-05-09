@@ -80,11 +80,20 @@ impl ElementList {
         let mut res = ElementList::default();
 
         while let Some(line) = lines.next_line().await? {
-            res.inner.push(Element {
-                name: line.clone(),
-                value: line.clone(),
-                base_score: 0,
-            })
+            let split = line.split('=').collect::<Vec<&str>>();
+            match split[..] {
+                [name, value] => res.inner.push(Element {
+                    name: name.to_string(),
+                    value: value.to_string(),
+                    base_score: 0,
+                }),
+                [name] => res.inner.push(Element {
+                    name: name.to_string(),
+                    value: name.to_string(),
+                    base_score: 0,
+                }),
+                _ => (),
+            }
         }
 
         Ok(res)

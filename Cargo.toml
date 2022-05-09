@@ -14,7 +14,7 @@ keywords = ["wayland", "launcher", "wlroots"]
 wayland-client = "0.29.0"
 smithay-client-toolkit = "0.15.2"
 fontdue = "0.7.2"
-image = "0.24.0"
+image = { version = "0.24.0", default-features = false }
 fuzzy-matcher = "0.3.7"
 nix = { version = "0.24.1", default_features = false, features = ["process"] }
 shellwords = "1.1.0"

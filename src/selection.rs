@@ -73,6 +73,7 @@ impl ElementList {
     }
 
     pub async fn from_stdin() -> Result<Self, Box<dyn Error>> {
+        // TODO: parse '=' assignments
         let stdin = io::stdin();
         let reader = io::BufReader::new(stdin);
         let mut lines = reader.lines();

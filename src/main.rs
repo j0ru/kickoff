@@ -87,10 +87,14 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         Either::Right(selection::ElementList::from_path())
     };
 
-    let history = {
+    let history = if !args.stdin || args.history.is_some() {
         let path = args.history.clone();
         let decrease_interval = config.history.decrease_interval;
-        tokio::task::spawn_blocking(move || History::load(path, decrease_interval))
+        Some(tokio::task::spawn_blocking(move || {
+            History::load(path, decrease_interval)
+        }))
+    } else {
+        None
     };
 
     let font = if let Some(font_name) = config.font {
@@ -105,9 +109,15 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let mut history = history.await??;
     let mut apps = apps.await?;
-    apps.merge_history(&history);
+    let history = match history {
+        Some(history) => {
+            let history = history.await??;
+            apps.merge_history(&history);
+            Some(history)
+        }
+        None => None,
+    };
     apps.sort();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
@@ -194,8 +204,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     };
                     if args.stdout {
                         print!("{}", element.value);
-                        history.inc(&element.value);
-                        history.save()?;
+                        if let Some(mut history) = history {
+                            history.inc(&element.value);
+                            history.save()?;
+                        }
                         return Ok(None);
                     } else {
                         return Ok(Some(exec(element, history)?));
@@ -291,7 +303,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
 fn exec(
     elem: selection::Element,
-    mut history: History,
+    history: Option<History>,
 ) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
     let command = elem.value;
     let mut args = shellwords::split(&command)?;
@@ -301,13 +313,15 @@ fn exec(
                 tokio::time::sleep(Duration::new(1, 0)).await;
                 match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                     Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
-                        history.inc(&command);
-                        match history.save() {
-                            Ok(()) => {}
-                            Err(e) => {
-                                error!("{}", e);
-                            }
-                        };
+                        if let Some(mut history) = history {
+                            history.inc(&command);
+                            match history.save() {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    error!("{}", e);
+                                }
+                            };
+                        }
                     }
                     Ok(_) => {
                         /* Every non 0 statuscode holds no information since it's

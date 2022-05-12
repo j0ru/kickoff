@@ -45,6 +45,7 @@ and if it fits the search query.
 - Remembers often used applications
 - Argument support for launched programs
 - Paste support
+- Build list from stdin
 
 ## Configuration
 
@@ -55,4 +56,3 @@ or can be found [here](https://github.com/j0ru/kickoff/blob/main/assets/default_
 
 - Include aliases in search results
 - Testing and documentation
-- Dmenu like parsing of stdin

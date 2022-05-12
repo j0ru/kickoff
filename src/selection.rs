@@ -1,5 +1,15 @@
 use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use log::error;
+use nom::{
+    branch::alt,
+    bytes::complete::is_not,
+    character::complete::char,
+    combinator::opt,
+    sequence::pair,
+    sequence::{delimited, preceded},
+    Finish, IResult,
+};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::error::Error;
 use std::{env, os::unix::fs::PermissionsExt};
@@ -73,26 +83,30 @@ impl ElementList {
     }
 
     pub async fn from_stdin() -> Result<Self, Box<dyn Error>> {
-        // TODO: parse '=' assignments
         let stdin = io::stdin();
         let reader = io::BufReader::new(stdin);
         let mut lines = reader.lines();
         let mut res = ElementList::default();
 
         while let Some(line) = lines.next_line().await? {
-            let split = line.split('=').collect::<Vec<&str>>();
-            match split[..] {
-                [name, value] => res.inner.push(Element {
-                    name: name.to_string(),
+            let kv_pair = match parse_stdin(&line) {
+                Ok(res) => res,
+                Err(e) => {
+                    error!("Failed parsing {}", e);
+                    continue;
+                }
+            };
+            match kv_pair {
+                (key, Some(value)) => res.inner.push(Element {
+                    name: key.to_string(),
                     value: value.to_string(),
                     base_score: 0,
                 }),
-                [name] => res.inner.push(Element {
-                    name: name.to_string(),
-                    value: name.to_string(),
+                (key, None) => res.inner.push(Element {
+                    name: key.to_string(),
+                    value: key.to_string(),
                     base_score: 0,
                 }),
-                _ => (),
             }
         }
 
@@ -139,4 +153,22 @@ impl ElementList {
     pub fn as_ref_vec(&self) -> Vec<&Element> {
         self.inner.iter().collect()
     }
+}
+
+fn parse_stdin<'a>(
+    input: &'a str,
+) -> Result<(&str, Option<&str>), Box<dyn std::error::Error + 'a>> {
+    match pair(
+        alt((is_not("\"="), quoted_string)),
+        opt(preceded(char('='), alt((is_not("\""), quoted_string)))),
+    )(input)
+    .finish()
+    {
+        Ok((_unparsed, res)) => Ok(res),
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
+fn quoted_string(input: &str) -> IResult<&str, &str> {
+    delimited(char('"'), is_not("\""), char('"'))(input)
 }

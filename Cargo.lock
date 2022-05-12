@@ -699,6 +699,7 @@ dependencies = [
  "image",
  "log",
  "nix 0.24.1",
+ "nom",
  "notify-rust",
  "serde",
  "shellwords",

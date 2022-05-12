@@ -71,7 +71,6 @@ impl ElementList {
 
             for exe in executables_iter {
                 let name = exe.file_name().to_str().unwrap().to_string();
-                println!("{}: {:?}", name, exe);
                 res.inner.push(Element {
                     value: name.clone(),
                     name,

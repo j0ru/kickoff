@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
-use futures::future::Either;
+use futures::future::FutureExt;
 use history::History;
 use image::ImageBuffer;
 use log::error;
@@ -48,6 +48,10 @@ struct Args {
     #[clap(long)]
     stdin: bool,
 
+    /// Read list from PATH, default true, unless stdin is set
+    #[clap(long)]
+    path: bool,
+
     /// Output selection to stdout instead of executing it
     #[clap(long)]
     stdout: bool,
@@ -81,10 +85,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let apps = if args.stdin {
-        Either::Left(selection::ElementList::from_stdin())
-    } else {
-        Either::Right(selection::ElementList::from_path())
+    let apps = match (args.stdin, args.path) {
+        (true, false) => selection::ElementList::from_stdin().boxed(),
+        (true, true) => selection::ElementList::from_both().boxed(),
+        _ => selection::ElementList::from_path().boxed(),
     };
 
     let history = if !args.stdin || args.history.is_some() {

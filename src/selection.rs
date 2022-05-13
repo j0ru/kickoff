@@ -46,6 +46,13 @@ pub struct ElementList {
 }
 
 impl ElementList {
+    pub async fn from_both() -> Result<Self, Box<dyn Error>> {
+        let mut path = Self::from_path().await?;
+        let stdin = Self::from_stdin().await?;
+        path.merge(stdin);
+        Ok(path)
+    }
+
     pub async fn from_path() -> Result<Self, Box<dyn Error>> {
         match tokio::task::spawn_blocking(ElementList::fetch_list).await? {
             Ok(list) => Ok(list),
@@ -114,6 +121,12 @@ impl ElementList {
         }
 
         Ok(res)
+    }
+
+    pub fn merge(&mut self, other: ElementList) {
+        for elem in other.inner.iter() {
+            self.inner.push(elem.clone())
+        }
     }
 
     pub fn sort(&mut self) {

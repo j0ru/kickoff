@@ -10,8 +10,11 @@ use nom::{
     sequence::{delimited, preceded},
     Finish, IResult,
 };
-use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::error::Error;
+use std::{
+    cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
+    path::PathBuf,
+};
 use std::{env, os::unix::fs::PermissionsExt};
 use tokio::io::{self, AsyncBufReadExt};
 
@@ -46,16 +49,17 @@ pub struct ElementList {
 }
 
 impl ElementList {
-    pub async fn from_both() -> Result<Self, Box<dyn Error>> {
-        let mut path = Self::from_path().await?;
-        let stdin = Self::from_stdin().await?;
-        path.merge(stdin);
-        Ok(path)
+    pub async fn add_files(&mut self, files: &Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
+        todo!()
     }
 
-    pub async fn from_path() -> Result<Self, Box<dyn Error>> {
-        match tokio::task::spawn_blocking(ElementList::fetch_list).await? {
-            Ok(list) => Ok(list),
+    pub async fn add_path(&mut self) -> Result<(), Box<dyn Error>> {
+        let path_list = tokio::task::spawn_blocking(ElementList::fetch_list).await?;
+        match path_list {
+            Ok(mut path_list) => {
+                self.inner.append(&mut path_list.inner);
+                Ok(())
+            }
             Err(e) => Err(e),
         }
     }
@@ -92,14 +96,14 @@ impl ElementList {
         Ok(res)
     }
 
-    pub async fn from_stdin() -> Result<Self, Box<dyn Error>> {
+    pub async fn add_stdin(&mut self) -> Result<(), Box<dyn Error>> {
         let stdin = io::stdin();
         let reader = io::BufReader::new(stdin);
         let mut lines = reader.lines();
-        let mut res = ElementList::default();
+        let mut res = Vec::new();
 
         while let Some(line) = lines.next_line().await? {
-            let kv_pair = match parse_stdin(&line) {
+            let kv_pair = match parse_line(&line) {
                 Ok(res) => res,
                 Err(e) => {
                     error!("Failed parsing {}", e);
@@ -107,12 +111,12 @@ impl ElementList {
                 }
             };
             match kv_pair {
-                (key, Some(value)) => res.inner.push(Element {
+                (key, Some(value)) => res.push(Element {
                     name: key.to_string(),
                     value: value.to_string(),
                     base_score: 0,
                 }),
-                (key, None) => res.inner.push(Element {
+                (key, None) => res.push(Element {
                     name: key.to_string(),
                     value: key.to_string(),
                     base_score: 0,
@@ -120,13 +124,9 @@ impl ElementList {
             }
         }
 
-        Ok(res)
-    }
+        self.inner.append(&mut res);
 
-    pub fn merge(&mut self, other: ElementList) {
-        for elem in other.inner.iter() {
-            self.inner.push(elem.clone())
-        }
+        Ok(())
     }
 
     pub fn sort(&mut self) {
@@ -171,9 +171,7 @@ impl ElementList {
     }
 }
 
-fn parse_stdin<'a>(
-    input: &'a str,
-) -> Result<(&str, Option<&str>), Box<dyn std::error::Error + 'a>> {
+fn parse_line<'a>(input: &'a str) -> Result<(&str, Option<&str>), Box<dyn std::error::Error + 'a>> {
     match pair(
         alt((is_not("\"="), quoted_string)),
         opt(preceded(char('='), alt((is_not("\""), quoted_string)))),

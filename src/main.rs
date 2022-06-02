@@ -1,10 +1,9 @@
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
-use futures::future::FutureExt;
 use history::History;
 use image::ImageBuffer;
-use log::error;
+use log::*;
 use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
@@ -46,11 +45,14 @@ struct Args {
 
     /// Read list from stdin instead of PATH
     #[clap(long)]
-    stdin: bool,
+    from_stdin: bool,
 
     /// Read list from PATH, default true, unless stdin is set
     #[clap(long)]
-    path: bool,
+    from_path: bool,
+
+    #[clap(long)]
+    from_file: Vec<PathBuf>,
 
     /// Output selection to stdout instead of executing it
     #[clap(long)]
@@ -85,13 +87,18 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let apps = match (args.stdin, args.path) {
-        (true, false) => selection::ElementList::from_stdin().boxed(),
-        (true, true) => selection::ElementList::from_both().boxed(),
-        _ => selection::ElementList::from_path().boxed(),
-    };
+    let mut apps = selection::ElementList::default();
+    if args.from_path || (!args.from_stdin && args.from_file.is_empty()) {
+        apps.add_path().await?;
+    }
+    if !args.from_file.is_empty() {
+        apps.add_files(&args.from_file).await?;
+    }
+    if args.from_stdin {
+        apps.add_stdin().await?;
+    }
 
-    let history = if !args.stdin || args.history.is_some() {
+    let history = if (!args.from_stdin && args.from_file.is_empty()) || args.history.is_some() {
         let path = args.history.clone();
         let decrease_interval = config.history.decrease_interval;
         Some(tokio::task::spawn_blocking(move || {
@@ -113,7 +120,8 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let mut apps = apps.await?;
+    // TODO: app laden wieder asyncron machen
+    // let mut apps = apps.await?;
     let history = match history {
         Some(history) => {
             let history = history.await??;

@@ -139,11 +139,12 @@ impl ElementListBuilder {
             .flat_map(|e| e.unwrap())
             .flatten()
             .collect::<Vec<Element>>();
+        // TODO: output errors instead of ignoring
 
         Ok(ElementList { inner: res })
     }
 
-    fn build_files(files: &Vec<PathBuf>) -> Result<Vec<Element>, std::io::Error> {
+    fn build_files(files: &[PathBuf]) -> Result<Vec<Element>, std::io::Error> {
         let mut res = Vec::new();
         for file in files {
             let mut reader = BufReader::new(File::open(file)?);

@@ -1,6 +1,6 @@
 use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use log::error;
+use log::*;
 use nom::{
     branch::alt,
     bytes::complete::is_not,
@@ -10,13 +10,17 @@ use nom::{
     sequence::{delimited, preceded},
     Finish, IResult,
 };
-use std::error::Error;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
+    io::{BufRead, BufReader},
     path::PathBuf,
 };
 use std::{env, os::unix::fs::PermissionsExt};
-use tokio::io::{self, AsyncBufReadExt};
+use std::{error::Error, fs::File};
+use tokio::{
+    io::{self, AsyncBufReadExt},
+    task::{spawn, spawn_blocking},
+};
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Element {
@@ -49,88 +53,9 @@ pub struct ElementList {
 }
 
 impl ElementList {
-    pub async fn add_files(&mut self, files: &Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
-        todo!()
-    }
-
-    pub async fn add_path(&mut self) -> Result<(), Box<dyn Error>> {
-        let path_list = tokio::task::spawn_blocking(ElementList::fetch_list).await?;
-        match path_list {
-            Ok(mut path_list) => {
-                self.inner.append(&mut path_list.inner);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    fn fetch_list() -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let var = env::var("PATH")?;
-
-        let mut res = ElementList::default();
-
-        let paths_iter = env::split_paths(&var);
-        let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
-
-        for dir in dirs_iter {
-            let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
-                if let Ok(metadata) = file.metadata() {
-                    return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
-                }
-                false
-            });
-
-            for exe in executables_iter {
-                let name = exe.file_name().to_str().unwrap().to_string();
-                res.inner.push(Element {
-                    value: name.clone(),
-                    name,
-                    base_score: 0,
-                });
-            }
-        }
-
-        res.sort();
-        res.inner.dedup_by(|a, b| a.name.eq(&b.name));
-
-        Ok(res)
-    }
-
-    pub async fn add_stdin(&mut self) -> Result<(), Box<dyn Error>> {
-        let stdin = io::stdin();
-        let reader = io::BufReader::new(stdin);
-        let mut lines = reader.lines();
-        let mut res = Vec::new();
-
-        while let Some(line) = lines.next_line().await? {
-            let kv_pair = match parse_line(&line) {
-                Ok(res) => res,
-                Err(e) => {
-                    error!("Failed parsing {}", e);
-                    continue;
-                }
-            };
-            match kv_pair {
-                (key, Some(value)) => res.push(Element {
-                    name: key.to_string(),
-                    value: value.to_string(),
-                    base_score: 0,
-                }),
-                (key, None) => res.push(Element {
-                    name: key.to_string(),
-                    value: key.to_string(),
-                    base_score: 0,
-                }),
-            }
-        }
-
-        self.inner.append(&mut res);
-
-        Ok(())
-    }
-
-    pub fn sort(&mut self) {
-        self.inner.sort();
+    #![allow(clippy::new_ret_no_self)]
+    pub fn new() -> ElementListBuilder {
+        ElementListBuilder::default()
     }
 
     pub fn merge_history(&mut self, history: &History) {
@@ -168,6 +93,146 @@ impl ElementList {
 
     pub fn as_ref_vec(&self) -> Vec<&Element> {
         self.inner.iter().collect()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ElementListBuilder {
+    from_path: bool,
+    from_stdin: bool,
+    from_file: Vec<PathBuf>,
+}
+
+impl ElementListBuilder {
+    pub fn add_path(&mut self) {
+        self.from_path = true;
+    }
+    pub fn add_files(&mut self, files: &[PathBuf]) {
+        self.from_file = files.to_vec();
+    }
+    pub fn add_stdin(&mut self) {
+        self.from_stdin = true;
+    }
+
+    pub async fn build(&self) -> Result<ElementList, Box<dyn Error>> {
+        let mut fut = Vec::new();
+        if self.from_stdin {
+            fut.push(spawn(ElementListBuilder::build_stdin()))
+        }
+        if !self.from_file.is_empty() {
+            let files = self.from_file.clone();
+            fut.push(spawn_blocking(move || {
+                ElementListBuilder::build_files(&files)
+            }))
+        }
+        if self.from_path {
+            fut.push(spawn_blocking(ElementListBuilder::build_path))
+        }
+
+        let res = futures::future::join_all(fut)
+            .await
+            .into_iter()
+            .flat_map(|e| e.unwrap())
+            .flatten()
+            .collect::<Vec<Element>>();
+
+        Ok(ElementList { inner: res })
+    }
+
+    fn build_files(files: &Vec<PathBuf>) -> Result<Vec<Element>, std::io::Error> {
+        let mut res = Vec::new();
+        for file in files {
+            let mut reader = BufReader::new(File::open(file)?);
+            let mut buf = String::new();
+            while reader.read_line(&mut buf)? > 0 {
+                let kv_pair = match parse_line(&buf) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        error!("Failed parsing {}", e);
+                        continue;
+                    }
+                };
+                match kv_pair {
+                    (key, Some(value)) => res.push(Element {
+                        name: key.to_string(),
+                        value: value.to_string(),
+                        base_score: 0,
+                    }),
+                    (key, None) => res.push(Element {
+                        name: key.to_string(),
+                        value: key.to_string(),
+                        base_score: 0,
+                    }),
+                }
+
+                buf.clear();
+            }
+        }
+
+        Ok(res)
+    }
+
+    fn build_path() -> Result<Vec<Element>, std::io::Error> {
+        let var = env::var("PATH").unwrap();
+
+        let mut res = Vec::new();
+
+        let paths_iter = env::split_paths(&var);
+        let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
+
+        for dir in dirs_iter {
+            let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
+                if let Ok(metadata) = file.metadata() {
+                    return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
+                }
+                false
+            });
+
+            for exe in executables_iter {
+                let name = exe.file_name().to_str().unwrap().to_string();
+                res.push(Element {
+                    value: name.clone(),
+                    name,
+                    base_score: 0,
+                });
+            }
+        }
+
+        res.sort();
+        res.dedup_by(|a, b| a.name.eq(&b.name));
+
+        Ok(res)
+    }
+
+    async fn build_stdin() -> Result<Vec<Element>, std::io::Error> {
+        let stdin = io::stdin();
+        let reader = io::BufReader::new(stdin);
+        let mut lines = reader.lines();
+        let mut res = Vec::new();
+
+        while let Some(line) = lines.next_line().await? {
+            let kv_pair = match parse_line(&line) {
+                Ok(res) => res,
+                Err(e) => {
+                    error!("Failed parsing {}", e);
+                    continue;
+                }
+            };
+            match kv_pair {
+                (key, Some(value)) => res.push(Element {
+                    name: key.to_string(),
+                    value: value.to_string(),
+                    base_score: 0,
+                }),
+                (key, None) => res.push(Element {
+                    name: key.to_string(),
+                    value: key.to_string(),
+                    base_score: 0,
+                }),
+            }
+        }
+
+        Ok(res)
     }
 }
 

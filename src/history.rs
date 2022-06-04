@@ -61,7 +61,7 @@ impl History {
         let mut rdr = csv::Reader::from_path(history_path).unwrap();
         for result in rdr.deserialize() {
             let mut record: HistoryEntry = result?;
-            record.num_used -= interval_diff as usize;
+            record.num_used = record.num_used.saturating_sub(interval_diff as usize);
             res.entries.push(record);
         }
 

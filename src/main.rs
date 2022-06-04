@@ -87,16 +87,17 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let mut apps = selection::ElementList::default();
+    let mut apps = selection::ElementList::new();
     if args.from_path || (!args.from_stdin && args.from_file.is_empty()) {
-        apps.add_path().await?;
+        apps.add_path();
     }
     if !args.from_file.is_empty() {
-        apps.add_files(&args.from_file).await?;
+        apps.add_files(&args.from_file);
     }
     if args.from_stdin {
-        apps.add_stdin().await?;
+        apps.add_stdin();
     }
+    let apps = apps.build();
 
     let history = if (!args.from_stdin && args.from_file.is_empty()) || args.history.is_some() {
         let path = args.history.clone();
@@ -120,8 +121,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    // TODO: app laden wieder asyncron machen
-    // let mut apps = apps.await?;
+    let mut apps = apps.await?;
     let history = match history {
         Some(history) => {
             let history = history.await??;
@@ -130,7 +130,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
         None => None,
     };
-    apps.sort();
+    //apps.sort();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env

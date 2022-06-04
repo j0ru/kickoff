@@ -130,7 +130,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
         None => None,
     };
-    //apps.sort();
+    apps.sort_score();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env

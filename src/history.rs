@@ -62,7 +62,9 @@ impl History {
         for result in rdr.deserialize() {
             let mut record: HistoryEntry = result?;
             record.num_used = record.num_used.saturating_sub(interval_diff as usize);
-            res.entries.push(record);
+            if record.num_used > 0 {
+                res.entries.push(record);
+            }
         }
 
         Ok(res)

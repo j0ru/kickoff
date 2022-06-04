@@ -72,6 +72,10 @@ impl ElementList {
         }
     }
 
+    pub fn sort_score(&mut self) {
+        self.inner.sort_by(|a, b| b.base_score.cmp(&a.base_score))
+    }
+
     pub fn search(&self, pattern: &str) -> Vec<&Element> {
         let matcher = SkimMatcherV2::default();
         let mut executables = self

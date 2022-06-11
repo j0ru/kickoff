@@ -318,7 +318,6 @@ fn exec(
     history: Option<History>,
 ) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
     let command = elem.value;
-    let mut args = shellwords::split(&command)?;
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
             Ok(tokio::spawn(async move {
@@ -346,7 +345,7 @@ fn exec(
             }))
         }
         Ok(ForkResult::Child) => {
-            let err = exec::Command::new(args.remove(0)).args(&args).exec();
+            let err = exec::Command::new("sh").args(&["-c", &command]).exec();
 
             // Won't be executed when exec was successful
             error!("{}", err);

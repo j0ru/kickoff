@@ -842,7 +842,6 @@ dependencies = [
  "nom",
  "notify-rust",
  "serde",
- "shellwords",
  "smithay-client-toolkit",
  "smithay-clipboard",
  "tokio",
@@ -1522,16 +1521,6 @@ name = "sha1_smol"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
-
-[[package]]
-name = "shellwords"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e515aa4699a88148ed5ef96413ceef0048ce95b43fbc955a33bde0a70fcae6"
-dependencies = [
- "lazy_static",
- "regex",
-]
 
 [[package]]
 name = "slab"

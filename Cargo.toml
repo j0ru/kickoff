@@ -17,7 +17,6 @@ fontdue = "0.7.2"
 image = { version = "0.24.0", default-features = false }
 fuzzy-matcher = "0.3.7"
 nix = { version = "0.24.1", default_features = false, features = ["process"] }
-shellwords = "1.1.0"
 css-color = "0.2.4"
 exec = "0.3.1"
 xdg = "2.2.0"

@@ -185,10 +185,9 @@ impl ElementListBuilder {
     }
 
     fn build_path() -> Result<Vec<Element>, std::io::Error> {
-        use std::collections::HashSet;
         let var = env::var("PATH").unwrap();
 
-        let mut res: HashSet<Element> = HashSet::new();
+        let mut res: Vec<Element> = Vec::new();
 
         let paths_iter = env::split_paths(&var);
         let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
@@ -198,7 +197,7 @@ impl ElementListBuilder {
                 if let Ok(metadata) = file.metadata() {
                     if !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0 {
                         let name = file.file_name().to_str().unwrap().to_string();
-                        res.insert(Element {
+                        res.push(Element {
                             value: name.clone(),
                             name,
                             base_score: 0,
@@ -208,7 +207,10 @@ impl ElementListBuilder {
             });
         }
 
-        Ok(res.into_iter().collect())
+        res.sort();
+        res.dedup_by(|a, b| a.name == b.name);
+
+        Ok(res)
     }
 
     async fn build_stdin() -> Result<Vec<Element>, std::io::Error> {

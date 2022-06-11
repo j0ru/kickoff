@@ -1,4 +1,5 @@
 use crate::history::History;
+use core::hash::Hash;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::*;
 use nom::{
@@ -21,7 +22,6 @@ use tokio::{
     io::{self, AsyncBufReadExt},
     task::{spawn, spawn_blocking},
 };
-use core::hash::Hash;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Element {

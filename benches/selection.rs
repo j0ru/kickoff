@@ -5,11 +5,12 @@ use kickoff::selection::*;
 
 fn bench_build(c: &mut Criterion) {
     c.bench_function("build_path", |b| {
-        b.to_async(Builder::new_multi_thread().enable_all().build().unwrap()).iter(|| async {
-            let mut element_build = ElementList::new();
-            element_build.add_path();
-            element_build.build().await.unwrap();
-        })
+        b.to_async(Builder::new_multi_thread().enable_all().build().unwrap())
+            .iter(|| async {
+                let mut element_build = ElementList::new();
+                element_build.add_path();
+                element_build.build().await.unwrap();
+            })
     });
 }
 

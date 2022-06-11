@@ -21,12 +21,19 @@ use tokio::{
     io::{self, AsyncBufReadExt},
     task::{spawn, spawn_blocking},
 };
+use core::hash::Hash;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Element {
     pub name: String,
     pub value: String,
     pub base_score: usize,
+}
+
+impl Hash for Element {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
 }
 
 impl Ord for Element {
@@ -133,13 +140,13 @@ impl ElementListBuilder {
             fut.push(spawn_blocking(ElementListBuilder::build_path))
         }
 
-        let res = futures::future::join_all(fut)
-            .await
-            .into_iter()
-            .flat_map(|e| e.unwrap())
-            .flatten()
-            .collect::<Vec<Element>>();
-        // TODO: output errors instead of ignoring
+        let finished = futures::future::join_all(fut).await;
+
+        let mut res = Vec::new();
+        for elements in finished {
+            let mut elements = elements??;
+            res.append(&mut elements);
+        }
 
         Ok(ElementList { inner: res })
     }
@@ -178,35 +185,30 @@ impl ElementListBuilder {
     }
 
     fn build_path() -> Result<Vec<Element>, std::io::Error> {
+        use std::collections::HashSet;
         let var = env::var("PATH").unwrap();
 
-        let mut res = Vec::new();
+        let mut res: HashSet<Element> = HashSet::new();
 
         let paths_iter = env::split_paths(&var);
         let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
 
         for dir in dirs_iter {
-            let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
+            dir.filter_map(|file| file.ok()).for_each(|file| {
                 if let Ok(metadata) = file.metadata() {
-                    return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
+                    if !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0 {
+                        let name = file.file_name().to_str().unwrap().to_string();
+                        res.insert(Element {
+                            value: name.clone(),
+                            name,
+                            base_score: 0,
+                        });
+                    }
                 }
-                false
             });
-
-            for exe in executables_iter {
-                let name = exe.file_name().to_str().unwrap().to_string();
-                res.push(Element {
-                    value: name.clone(),
-                    name,
-                    base_score: 0,
-                });
-            }
         }
 
-        res.sort();
-        res.dedup_by(|a, b| a.name.eq(&b.name));
-
-        Ok(res)
+        Ok(res.into_iter().collect())
     }
 
     async fn build_stdin() -> Result<Vec<Element>, std::io::Error> {

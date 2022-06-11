@@ -30,12 +30,6 @@ pub struct Element {
     pub base_score: usize,
 }
 
-impl Hash for Element {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
 impl Ord for Element {
     fn cmp(&self, other: &Element) -> Ordering {
         match other.base_score.cmp(&self.base_score) {

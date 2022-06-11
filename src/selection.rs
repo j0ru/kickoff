@@ -1,5 +1,4 @@
 use crate::history::History;
-use core::hash::Hash;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::*;
 use nom::{

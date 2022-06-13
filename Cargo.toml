@@ -2,7 +2,7 @@
 name = "kickoff"
 version = "0.5.1"
 authors = ["Folke Gleumes <folke-kickoff@gleumes.org>"]
-edition = "2018"
+edition = "2021"
 description = "Fast and minimal program launcher"
 license = "GPL-3.0-or-later"
 homepage = "https://github.com/j0ru/kickoff"

@@ -47,7 +47,7 @@ default_environment!(Env,
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
-    #[clap(short, long)]
+    #[clap(short, long, value_parser)]
     config: Option<PathBuf>,
 }
 

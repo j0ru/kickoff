@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "kickoff"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "css-color",

@@ -39,7 +39,6 @@ default_environment!(Env,
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
-    /// Use config at custom path
     #[clap(short, long)]
     config: Option<PathBuf>,
 

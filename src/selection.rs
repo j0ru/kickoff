@@ -10,13 +10,13 @@ use nom::{
     sequence::{delimited, preceded},
     Finish, IResult,
 };
+use std::fs::File;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     io::{BufRead, BufReader},
     path::PathBuf,
 };
 use std::{env, os::unix::fs::PermissionsExt};
-use std::{error::Error, fs::File};
 use tokio::{
     io::{self, AsyncBufReadExt},
     task::{spawn, spawn_blocking},
@@ -118,7 +118,7 @@ impl ElementListBuilder {
         self.from_stdin = true;
     }
 
-    pub async fn build(&self) -> Result<ElementList, Box<dyn Error>> {
+    pub async fn build(&self) -> Result<ElementList, Box<dyn std::error::Error>> {
         let mut fut = Vec::new();
         if self.from_stdin {
             fut.push(spawn(ElementListBuilder::build_stdin()))
@@ -245,7 +245,11 @@ fn parse_line<'a>(input: &'a str) -> Result<(&str, Option<&str>), Box<dyn std::e
     )(input)
     .finish()
     {
-        Ok((_unparsed, res)) => Ok(res),
+        Ok(("", res)) => Ok(res),
+        Ok((unparsed, res)) => {
+            warn!("Input was not fully consumed: {unparsed}");
+            Ok(res)
+        }
         Err(e) => Err(Box::new(e)),
     }
 }

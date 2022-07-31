@@ -86,7 +86,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let mut apps = selection::ElementList::new();
+    let mut apps = selection::ElementListBuilder::new();
     if args.from_path || (!args.from_stdin && args.from_file.is_empty()) {
         apps.add_path();
     }

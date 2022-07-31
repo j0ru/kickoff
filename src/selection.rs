@@ -53,11 +53,6 @@ pub struct ElementList {
 }
 
 impl ElementList {
-    #![allow(clippy::new_ret_no_self)]
-    pub fn new() -> ElementListBuilder {
-        ElementListBuilder::default()
-    }
-
     pub fn merge_history(&mut self, history: &History) {
         for entry in history.as_vec().iter() {
             if let Some(elem) = self.inner.iter_mut().find(|x| x.name == entry.name) {
@@ -108,6 +103,10 @@ pub struct ElementListBuilder {
 }
 
 impl ElementListBuilder {
+    pub fn new() -> ElementListBuilder {
+        ElementListBuilder::default()
+    }
+
     pub fn add_path(&mut self) {
         self.from_path = true;
     }
@@ -151,7 +150,8 @@ impl ElementListBuilder {
             let mut buf = String::new();
             while reader.read_line(&mut buf)? > 0 {
                 let kv_pair = match parse_line(&buf) {
-                    Ok(res) => res,
+                    Ok(None) => continue,
+                    Ok(Some(res)) => res,
                     Err(e) => {
                         error!("Failed parsing {}", e);
                         continue;
@@ -214,7 +214,8 @@ impl ElementListBuilder {
 
         while let Some(line) = lines.next_line().await? {
             let kv_pair = match parse_line(&line) {
-                Ok(res) => res,
+                Ok(None) => continue,
+                Ok(Some(res)) => res,
                 Err(e) => {
                     error!("Failed parsing {}", e);
                     continue;
@@ -238,17 +239,20 @@ impl ElementListBuilder {
     }
 }
 
-fn parse_line<'a>(input: &'a str) -> Result<(&str, Option<&str>), Box<dyn std::error::Error + 'a>> {
+fn parse_line<'a>(
+    input: &'a str,
+) -> Result<Option<(&str, Option<&str>)>, Box<dyn std::error::Error + 'a>> {
     match pair(
         alt((is_not("\"="), quoted_string)),
         opt(preceded(char('='), alt((is_not("\""), quoted_string)))),
     )(input)
     .finish()
     {
-        Ok(("", res)) => Ok(res),
-        Ok((unparsed, res)) => {
+        Ok(("", ("", None))) => Ok(None),
+        Ok(("", res)) => Ok(Some(res)),
+        Ok((unparsed, _res)) => {
             warn!("Input was not fully consumed: {unparsed}");
-            Ok(res)
+            Ok(None)
         }
         Err(e) => Err(Box::new(e)),
     }

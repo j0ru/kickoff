@@ -60,7 +60,7 @@ impl ElementList {
             } else {
                 self.inner.push(Element {
                     name: entry.name.to_owned(),
-                    value: entry.name.to_owned(),
+                    value: entry.value.to_owned(),
                     base_score: entry.num_used,
                 })
             }
@@ -163,6 +163,7 @@ impl ElementListBuilder {
                         value: value.to_string(),
                         base_score: 0,
                     }),
+                    ("", None) => {} // Empty Line
                     (key, None) => res.push(Element {
                         name: key.to_string(),
                         value: key.to_string(),
@@ -227,6 +228,7 @@ impl ElementListBuilder {
                     value: value.to_string(),
                     base_score: 0,
                 }),
+                ("", None) => {} // Empty Line
                 (key, None) => res.push(Element {
                     name: key.to_string(),
                     value: key.to_string(),
@@ -242,6 +244,7 @@ impl ElementListBuilder {
 fn parse_line<'a>(
     input: &'a str,
 ) -> Result<Option<(&str, Option<&str>)>, Box<dyn std::error::Error + 'a>> {
+    let input = input.trim_end();
     match pair(
         alt((is_not("\"="), quoted_string)),
         opt(preceded(char('='), alt((is_not("\""), quoted_string)))),

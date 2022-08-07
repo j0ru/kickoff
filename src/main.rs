@@ -216,7 +216,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     if args.stdout {
                         print!("{}", element.value);
                         if let Some(mut history) = history {
-                            history.inc(&element.value);
+                            history.inc(&element);
                             history.save()?;
                         }
                         return Ok(None);
@@ -316,7 +316,7 @@ fn exec(
     elem: selection::Element,
     history: Option<History>,
 ) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
-    let command = elem.value;
+    let elem = elem.clone();
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
             Ok(tokio::spawn(async move {
@@ -324,7 +324,7 @@ fn exec(
                 match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                     Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
                         if let Some(mut history) = history {
-                            history.inc(&command);
+                            history.inc(&elem);
                             match history.save() {
                                 Ok(()) => {}
                                 Err(e) => {
@@ -344,7 +344,7 @@ fn exec(
             }))
         }
         Ok(ForkResult::Child) => {
-            let err = exec::Command::new("sh").args(&["-c", &command]).exec();
+            let err = exec::Command::new("sh").args(&["-c", &elem.value]).exec();
 
             // Won't be executed when exec was successful
             error!("{}", err);

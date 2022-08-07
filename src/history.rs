@@ -6,9 +6,12 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use xdg::BaseDirectories;
 
+use crate::selection::Element;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub name: String,
+    pub value: String,
     pub num_used: usize,
 }
 
@@ -75,12 +78,13 @@ impl History {
         Ok(res)
     }
 
-    pub fn inc(&mut self, name: &str) {
-        if let Some(entry) = self.entries.iter_mut().find(|x| x.name == name) {
+    pub fn inc(&mut self, element: &Element) {
+        if let Some(entry) = self.entries.iter_mut().find(|x| x.name == element.name) {
             entry.num_used += 1;
         } else {
             self.entries.push(HistoryEntry {
-                name: name.to_owned(),
+                name: element.name.to_owned(),
+                value: element.value.to_owned(),
                 num_used: 1,
             })
         }

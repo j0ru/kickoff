@@ -81,6 +81,7 @@ impl History {
     pub fn inc(&mut self, element: &Element) {
         if let Some(entry) = self.entries.iter_mut().find(|x| x.name == element.name) {
             entry.num_used += 1;
+            entry.value = element.value.to_owned();
         } else {
             self.entries.push(HistoryEntry {
                 name: element.name.to_owned(),

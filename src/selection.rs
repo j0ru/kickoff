@@ -241,6 +241,7 @@ impl ElementListBuilder {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_line<'a>(
     input: &'a str,
 ) -> Result<Option<(&str, Option<&str>)>, Box<dyn std::error::Error + 'a>> {

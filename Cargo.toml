@@ -11,31 +11,31 @@ readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
-wayland-client = "0.29.0"
-smithay-client-toolkit = "0.15.2"
+wayland-client = "0.29.4"
+smithay-client-toolkit = "0.15.4"
 fontdue = "0.7.2"
 image = { version = "0.24.3", default-features = false }
 fuzzy-matcher = "0.3.7"
 nix = { version = "0.24.2", default_features = false, features = ["process"] }
 css-color = "0.2.4"
 exec = "0.3.1"
-xdg = "2.2.0"
-toml = "0.5.8"
-serde = { version = "1.0.127", features = ["derive"] }
+xdg = "2.4.1"
+toml = "0.5.9"
+serde = { version = "1.0.142", features = ["derive"] }
 hex = "0.4.3"
-smithay-clipboard = "0.6.4"
+smithay-clipboard = "0.6.6"
 log = "0.4.17"
 env_logger = "0.9.0"
 x11-keysymdef = "0.2.0"
 fontconfig = "0.5.0"
-notify-rust = "4.5.6"
-clap = { version = "3.1.0", features = ["derive"] }
-csv = "1.1"
+notify-rust = "4.5.8"
+clap = { version = "3.2.16", features = ["derive"] }
+csv = "1.1.6"
 futures = "0.3.21"
-nom = "7.1"
+nom = "7.1.1"
 
 [dependencies.tokio]
-version = "1.19.2"
+version = "1.20.1"
 features = [
     "fs",
     "rt-multi-thread",

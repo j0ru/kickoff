@@ -1,0 +1,4 @@
+name,value,num_used
+foo bar,firefox,4
+kitty -o font_size=20,kitty -o font_size=20,1
+big kitty,kitty -o font_size=20,1

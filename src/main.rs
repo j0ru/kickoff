@@ -316,7 +316,6 @@ fn exec(
     elem: selection::Element,
     history: Option<History>,
 ) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
-    let elem = elem.clone();
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
             Ok(tokio::spawn(async move {

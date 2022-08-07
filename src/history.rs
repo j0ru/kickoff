@@ -1,5 +1,6 @@
 extern crate xdg;
 
+use log::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -42,29 +43,33 @@ impl History {
             path: history_path.clone(),
         };
 
-        let last_modified = history_path.metadata()?.modified()?;
-        let interval_diff = if decrease_interval > 0 {
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                / (3600 * decrease_interval)
-                - last_modified
+        if history_path.exists() {
+            let last_modified = history_path.metadata()?.modified()?;
+            let interval_diff = if decrease_interval > 0 {
+                SystemTime::now()
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .unwrap()
                     .as_secs()
                     / (3600 * decrease_interval)
-        } else {
-            0
-        };
+                    - last_modified
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                        / (3600 * decrease_interval)
+            } else {
+                0
+            };
 
-        let mut rdr = csv::Reader::from_path(history_path).unwrap();
-        for result in rdr.deserialize() {
-            let mut record: HistoryEntry = result?;
-            record.num_used = record.num_used.saturating_sub(interval_diff as usize);
-            if record.num_used > 0 {
-                res.entries.push(record);
+            let mut rdr = csv::Reader::from_path(history_path).unwrap();
+            for result in rdr.deserialize() {
+                let mut record: HistoryEntry = result?;
+                record.num_used = record.num_used.saturating_sub(interval_diff as usize);
+                if record.num_used > 0 {
+                    res.entries.push(record);
+                }
             }
+        } else {
+            info!("History file does not exists, will be created on saving");
         }
 
         Ok(res)

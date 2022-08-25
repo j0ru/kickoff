@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
-wayland-client = "0.29.4"
+wayland-client = "0.29.5"
 smithay-client-toolkit = "0.15.4"
 fontdue = "0.7.2"
 image = { version = "0.24.3", default-features = false }

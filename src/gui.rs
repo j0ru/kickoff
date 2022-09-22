@@ -32,7 +32,7 @@ use image::RgbaImage;
 
 use crate::keybinds::Keybindings;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum RenderEvent {
     Configure { width: u32, height: u32 },
     Closed,

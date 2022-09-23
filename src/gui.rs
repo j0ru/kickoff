@@ -28,7 +28,7 @@ use std::cell::Cell;
 use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
 use std::rc::Rc;
 
-use image::RgbaImage;
+use image::{Pixel, Rgba, RgbaImage};
 
 use crate::keybinds::Keybindings;
 
@@ -108,7 +108,7 @@ impl Surface {
         }
     }
 
-    pub fn draw(&mut self, image: &RgbaImage) -> Result<(), std::io::Error> {
+    pub fn draw(&mut self, mut image: RgbaImage) -> Result<(), std::io::Error> {
         if let Some(pool) = self.pools.pool() {
             let stride = 4 * self.dimensions.0 as i32;
             let width = self.dimensions.0 as i32;
@@ -118,7 +118,11 @@ impl Surface {
             pool.resize((stride * height) as usize)?;
 
             // Create a new buffer from the pool
-            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
+            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Argb8888);
+            image.pixels_mut().for_each(|pixel| {
+                let channels = pixel.channels_mut();
+                *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
+            });
 
             // Write the color to all bytes of the pool
             pool.seek(SeekFrom::Start(0))?;

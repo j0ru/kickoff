@@ -297,7 +297,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 );
             }
 
-            match surface.draw(&img) {
+            match surface.draw(img) {
                 Ok(_) => {}
                 Err(e) => {
                     error!("{}", e);

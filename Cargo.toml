@@ -21,7 +21,7 @@ css-color = "0.2.4"
 exec = "0.3.1"
 xdg = "2.4.1"
 toml = "0.5.9"
-serde = { version = "1.0.144", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 hex = "0.4.3"
 smithay-clipboard = "0.6.6"
 log = "0.4.17"

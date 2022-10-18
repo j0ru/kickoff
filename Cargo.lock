@@ -592,9 +592,9 @@ dependencies = [
 
 [[package]]
 name = "fontconfig"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25320ad784a9578ada0b395dd7dcd2321109404bbb341ec27e64b01a1e49b47"
+checksum = "9b0653582d9c82645f95bacd0dc87b49a3126f7a9633be8cafa9c6d17d525847"
 dependencies = [
  "yeslogic-fontconfig-sys",
 ]
@@ -2139,9 +2139,9 @@ checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
 
 [[package]]
 name = "yeslogic-fontconfig-sys"
-version = "3.2.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2bbd69036d397ebbff671b1b8e4d918610c181c5a16073b96f984a38d08c386"
+checksum = "d80ff910d97204bf5968023529d2f493e01377e087abc36ed0a95cf0f3fa2cec"
 dependencies = [
  "const-cstr",
  "dlib",

@@ -42,7 +42,7 @@ jobs:
 
       - name: Generate PKGBUILD
         env:
-          - PKGVER: ${ env.pkgver }
+          PKGVER: ${ env.pkgver }
         run: ./ci/generate-pkgbuild.py3
 
       - name: Publish AUR package

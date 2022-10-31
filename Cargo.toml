@@ -29,7 +29,7 @@ env_logger = "0.9.1"
 x11-keysymdef = "0.2.0"
 fontconfig = "0.6.0"
 notify-rust = "4.5.10"
-clap = { version = "4.0.12", features = ["derive"] }
+clap = { version = "4.0.18", features = ["derive"] }
 csv = "1.1.6"
 futures = "0.3.25"
 nom = "7.1.1"

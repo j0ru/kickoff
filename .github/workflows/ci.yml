@@ -36,11 +36,20 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Generate pkgver
+        run: |
+          echo "pkgver=$(git rev-list --count HEAD).$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Generate PKGBUILD
+        env:
+          - PKGVER: ${ env.pkgver }
+        run: ./ci/generate-pkgbuild.py3
+
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v2.5.0
         with:
           pkgname: kickoff-git
-          pkgbuild: ./PKGBUILD
+          pkgbuild: ./pkgbuild/kickoff-git/PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

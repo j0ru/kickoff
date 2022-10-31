@@ -3,6 +3,8 @@ on:
     branches:
       - main
 
+name: Publish to the Arch User Repository
+
 jobs:
   aur_publish:
     runs-on: ubuntu-latest
@@ -16,7 +18,7 @@ jobs:
       - name: Generate PKGBUILD
         env:
           PKGVER: ${ env.pkgver }
-        run: ./ci/generate-pkgbuild.py3
+        run: ./ci/generate-pkgbuild.py
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v2.5.0

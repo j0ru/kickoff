@@ -1,4 +1,5 @@
 use smithay_client_toolkit::{
+    get_surface_scale_factor,
     reexports::{
         calloop,
         client::protocol::{
@@ -25,7 +26,7 @@ use smithay_clipboard::Clipboard;
 
 use log::*;
 use std::cell::Cell;
-use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
+use std::io::{BufWriter, ErrorKind, Seek, Write};
 use std::rc::Rc;
 
 use image::{Pixel, Rgba, RgbaImage};
@@ -92,7 +93,7 @@ impl Surface {
                     layer_surface.ack_configure(serial);
                     next_render_event_handle.set(Some(RenderEvent::Configure { width, height }));
                 }
-                (_, _) => {}
+                _ => todo!(),
             }
         });
 
@@ -108,11 +109,11 @@ impl Surface {
         }
     }
 
-    pub fn draw(&mut self, mut image: RgbaImage) -> Result<(), std::io::Error> {
+    pub fn draw(&mut self, mut image: RgbaImage, scale: i32) -> Result<(), std::io::Error> {
         if let Some(pool) = self.pools.pool() {
-            let stride = 4 * self.dimensions.0 as i32;
-            let width = self.dimensions.0 as i32;
-            let height = self.dimensions.1 as i32;
+            let width = self.dimensions.0 as i32 * scale;
+            let height = self.dimensions.1 as i32 * scale;
+            let stride = 4 * width;
 
             // First make sure the pool is the right size
             pool.resize((stride * height) as usize)?;
@@ -125,7 +126,7 @@ impl Surface {
             });
 
             // Write the color to all bytes of the pool
-            pool.seek(SeekFrom::Start(0))?;
+            pool.rewind()?;
             {
                 let mut writer = BufWriter::new(&mut *pool);
                 writer.write_all(image.as_raw())?;
@@ -134,8 +135,7 @@ impl Surface {
 
             // Attach the buffer to the surface and mark the entire surface as damaged
             self.surface.attach(Some(&buffer), 0, 0);
-            self.surface
-                .damage_buffer(0, 0, width as i32, height as i32);
+            self.surface.damage_buffer(0, 0, width, height);
 
             // Finally, commit the surface
             self.surface.commit();
@@ -146,6 +146,14 @@ impl Surface {
                 "All pools are in use by Wayland",
             ))
         }
+    }
+
+    pub fn get_scale(&self) -> i32 {
+        get_surface_scale_factor(&self.surface)
+    }
+
+    pub fn set_scale(&mut self, scale: i32) {
+        self.surface.set_buffer_scale(scale);
     }
 }
 

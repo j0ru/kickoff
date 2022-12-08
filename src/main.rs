@@ -157,7 +157,8 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         match surface.next_render_event.take() {
             Some(RenderEvent::Closed) => break,
             Some(RenderEvent::Configure { width, height }) => {
-                need_redraw = surface.set_dimensions(width, height);
+                need_redraw = true;
+                surface.set_dimensions(width, height);
             }
             None => {}
         }
@@ -232,18 +233,26 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         if need_redraw {
             need_redraw = false;
 
-            let mut img = ImageBuffer::from_pixel(
-                surface.dimensions.0,
-                surface.dimensions.1,
-                config.colors.background.to_rgba(),
+            // adjust all components for Hidpi
+            let scale = surface.get_scale();
+            surface.set_scale(scale);
+            font.set_scale(scale);
+            let (width, height) = (
+                surface.dimensions.0 * scale as u32,
+                surface.dimensions.1 * scale as u32,
             );
+            let padding = config.padding * scale as u32;
+            let font_size = config.font_size * scale as f32;
+
+            let mut img =
+                ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
             let prompt_width = if !config.prompt.is_empty() {
                 let (width, _) = font.render(
                     &config.prompt,
                     &config.colors.prompt,
                     &mut img,
-                    config.padding,
-                    config.padding,
+                    padding,
+                    padding,
                 );
                 width
             } else {
@@ -256,20 +265,13 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 } else {
                     &config.colors.text_query
                 };
-                font.render(
-                    query,
-                    color,
-                    &mut img,
-                    config.padding + prompt_width,
-                    config.padding,
-                );
+                font.render(query, color, &mut img, padding + prompt_width, padding);
             }
 
-            let spacer = (1.5 * config.font_size) as u32;
-            let max_entries = ((surface.dimensions.1 - 2 * config.padding - spacer) as f32
-                / (config.font_size * 1.2)) as usize;
+            let spacer = (1.5 * font_size) as u32;
+            let max_entries = ((height - 2 * padding - spacer) as f32 / (font_size * 1.2)) as usize;
             let offset = if selection > (max_entries / 2) {
-                (selection - max_entries / 2) as usize
+                selection - max_entries / 2
             } else {
                 0
             };
@@ -289,15 +291,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &matched.name,
                     color,
                     &mut img,
-                    config.padding,
-                    (config.padding
-                        + spacer
-                        + (i - offset) as u32 * (config.font_size * 1.2) as u32)
-                        as u32,
+                    padding,
+                    padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
                 );
             }
 
-            match surface.draw(img) {
+            match surface.draw(img, scale) {
                 Ok(_) => {}
                 Err(e) => {
                     error!("{}", e);

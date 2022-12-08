@@ -17,7 +17,8 @@ use image::{Pixel, RgbaImage};
 pub struct Font {
     fonts: Vec<fontdue::Font>,
     layout: RefCell<Layout>,
-    scale: f32,
+    size: f32,
+    scale: i32,
     glyph_cache: RefCell<HashMap<GlyphRasterConfig, (Metrics, Vec<u8>)>>,
 }
 
@@ -49,9 +50,14 @@ impl Font {
         Ok(Font {
             fonts: font_data,
             layout: RefCell::new(Layout::new(CoordinateSystem::PositiveYDown)),
-            scale: size,
+            size,
+            scale: 1,
             glyph_cache: RefCell::new(HashMap::new()),
         })
+    }
+
+    pub fn set_scale(&mut self, scale: i32) {
+        self.scale = scale;
     }
 
     fn render_glyph(&self, conf: GlyphRasterConfig) -> (Metrics, Vec<u8>) {
@@ -90,7 +96,7 @@ impl Font {
             }
             layout.append(
                 &self.fonts,
-                &TextStyle::new(&c.to_string(), self.scale, font_index),
+                &TextStyle::new(&c.to_string(), self.size * self.scale as f32, font_index),
             );
         }
 

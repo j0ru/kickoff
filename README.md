@@ -46,13 +46,9 @@ and if it fits the search query.
 - Argument support for launched programs
 - Paste support
 - Build list from stdin
+- Launch .desktop files [kickoff-dot-desktop](https://github.com/j0ru/kickoff-dot-desktop)
 
 ## Configuration
 
 A default configuration will be placed at `$XDG_CONFIG_HOME/kickoff/config.toml`
 or can be found [here](https://github.com/j0ru/kickoff/blob/main/assets/default_config.toml).
-
-## Roadmap
-
-- Include aliases in search results
-- Testing and documentation

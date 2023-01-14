@@ -6,7 +6,6 @@ Kickoff is heavily inspired by rofi, but not without changes made.
 Like many programs, kickoff was born from an itch that no existing program seemed to relieve and my desire to learn a lower level programming language.
 
 [![AUR version](https://img.shields.io/aur/version/kickoff?label=kickoff&logo=arch-linux&style=for-the-badge)](https://aur.archlinux.org/packages/kickoff/)
-[![AUR git version](https://img.shields.io/aur/version/kickoff-git?label=kickoff-git&logo=arch-linux&style=for-the-badge)](https://aur.archlinux.org/packages/kickoff-git/)
 [![Crates Version](https://img.shields.io/crates/v/kickoff?style=for-the-badge)](https://crates.io/crates/kickoff)
 
 ![screenshot](assets/screenshot.png)

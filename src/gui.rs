@@ -1,4 +1,5 @@
 use smithay_client_toolkit::{
+    get_surface_scale_factor,
     reexports::{
         calloop,
         client::protocol::{
@@ -23,15 +24,16 @@ use smithay_client_toolkit::{
 
 use smithay_clipboard::Clipboard;
 
+use log::*;
 use std::cell::Cell;
-use std::io::{BufWriter, ErrorKind, Seek, SeekFrom, Write};
+use std::io::{BufWriter, ErrorKind, Seek, Write};
 use std::rc::Rc;
 
-use image::RgbaImage;
+use image::{Pixel, Rgba, RgbaImage};
 
 use crate::keybinds::Keybindings;
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum RenderEvent {
     Configure { width: u32, height: u32 },
     Closed,
@@ -91,7 +93,7 @@ impl Surface {
                     layer_surface.ack_configure(serial);
                     next_render_event_handle.set(Some(RenderEvent::Configure { width, height }));
                 }
-                (_, _) => {}
+                _ => todo!(),
             }
         });
 
@@ -107,20 +109,24 @@ impl Surface {
         }
     }
 
-    pub fn draw(&mut self, image: &RgbaImage) -> Result<(), std::io::Error> {
+    pub fn draw(&mut self, mut image: RgbaImage, scale: i32) -> Result<(), std::io::Error> {
         if let Some(pool) = self.pools.pool() {
-            let stride = 4 * self.dimensions.0 as i32;
-            let width = self.dimensions.0 as i32;
-            let height = self.dimensions.1 as i32;
+            let width = self.dimensions.0 as i32 * scale;
+            let height = self.dimensions.1 as i32 * scale;
+            let stride = 4 * width;
 
             // First make sure the pool is the right size
             pool.resize((stride * height) as usize)?;
 
             // Create a new buffer from the pool
-            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Abgr8888);
+            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Argb8888);
+            image.pixels_mut().for_each(|pixel| {
+                let channels = pixel.channels_mut();
+                *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
+            });
 
             // Write the color to all bytes of the pool
-            pool.seek(SeekFrom::Start(0))?;
+            pool.rewind()?;
             {
                 let mut writer = BufWriter::new(&mut *pool);
                 writer.write_all(image.as_raw())?;
@@ -129,8 +135,7 @@ impl Surface {
 
             // Attach the buffer to the surface and mark the entire surface as damaged
             self.surface.attach(Some(&buffer), 0, 0);
-            self.surface
-                .damage_buffer(0, 0, width as i32, height as i32);
+            self.surface.damage_buffer(0, 0, width, height);
 
             // Finally, commit the surface
             self.surface.commit();
@@ -141,6 +146,14 @@ impl Surface {
                 "All pools are in use by Wayland",
             ))
         }
+    }
+
+    pub fn get_scale(&self) -> i32 {
+        get_surface_scale_factor(&self.surface)
+    }
+
+    pub fn set_scale(&mut self, scale: i32) {
+        self.surface.set_buffer_scale(scale);
     }
 }
 
@@ -190,7 +203,7 @@ pub fn register_inputs(
     event_loop: &calloop::EventLoop<DData>,
 ) {
     for seat in seats {
-        if let Some((has_ptr, _name)) = with_seat_data(&seat, |seat_data| {
+        if let Some((has_ptr, _name)) = with_seat_data(seat, |seat_data| {
             (
                 seat_data.has_pointer && !seat_data.defunct,
                 seat_data.name.clone(),
@@ -204,7 +217,7 @@ pub fn register_inputs(
     }
 
     for seat in seats {
-        if let Some((has_kbd, name)) = with_seat_data(&seat, |seat_data| {
+        if let Some((has_kbd, name)) = with_seat_data(seat, |seat_data| {
             (
                 seat_data.has_keyboard && !seat_data.defunct,
                 seat_data.name.clone(),
@@ -213,12 +226,12 @@ pub fn register_inputs(
             if has_kbd {
                 if let Err(err) = map_keyboard_repeat(
                     event_loop.handle(),
-                    &seat,
+                    seat,
                     None,
                     RepeatKind::System,
                     move |event, _, ddata| process_keyboard_event(event, ddata),
                 ) {
-                    eprintln!("Failed to map keyboard on seat {} : {:?}.", name, err)
+                    error!("Failed to map keyboard on seat {} : {:?}.", name, err)
                 }
             }
         }

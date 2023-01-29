@@ -1,5 +1,12 @@
-/target
 **/*.rs.bk
+
+# IDE folders
+.vscode/
+
+# Compilation artifacts
+/target
+
+# Profiling
 perf.data*
 flame.svg
 flamegraph.svg

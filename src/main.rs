@@ -1,4 +1,14 @@
+use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
+use clap::Parser;
+use history::History;
+use image::ImageBuffer;
+use log::*;
+use nix::{
+    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
+    unistd::{fork, ForkResult},
+};
+use notify_rust::Notification;
 use smithay_client_toolkit::{
     default_environment,
     environment::SimpleGlobal,
@@ -6,40 +16,18 @@ use smithay_client_toolkit::{
     reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
-
-use image::ImageBuffer;
-
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
-use std::collections::HashMap;
-use std::os::unix::fs::PermissionsExt;
-use std::{
-    cmp, env, fs,
-    io::{prelude::*, ErrorKind},
-    process,
-};
-
-use log::{debug, error};
-use nix::{
-    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
-    unistd::{fork, ForkResult},
-};
-use simplelog::{ColorChoice, Config as LogConfig, LevelFilter, TermLogger, TerminalMode};
-use std::error::Error;
-use std::time::Duration;
+use std::fs;
+use std::io::{ErrorKind, Read, Write};
+use std::{cmp, error::Error, path::PathBuf, process, time::Duration};
 use tokio::task::JoinHandle;
-
 use xdg::BaseDirectories;
-
-#[cfg(target_os = "linux")]
-use notify_rust::Notification;
-
 mod color;
 mod config;
 mod font;
 mod gui;
 mod history;
 mod keybinds;
+mod selection;
 
 default_environment!(Env,
     fields = [
@@ -50,14 +38,35 @@ default_environment!(Env,
     ],
 );
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+struct Args {
+    #[clap(short, long)]
+    config: Option<PathBuf>,
+
+    /// Read list from stdin instead of PATH
+    #[clap(long)]
+    from_stdin: bool,
+
+    /// Read list from PATH, default true, unless stdin is set
+    #[clap(long)]
+    from_path: bool,
+
+    #[clap(long)]
+    from_file: Vec<PathBuf>,
+
+    /// Output selection to stdout instead of executing it
+    #[clap(long)]
+    stdout: bool,
+
+    /// Set custom history name. Default history will only be used if stdin is not set
+    #[clap(long)]
+    history: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    TermLogger::init(
-        LevelFilter::Warn,
-        LogConfig::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    env_logger::init();
 
     match put_pid() {
         Ok(()) => {
@@ -83,7 +92,7 @@ fn put_pid() -> std::io::Result<()> {
     match fs::File::open(pid_path.clone()) {
         Err(_) => {
             let mut pid_file = fs::File::create(pid_path)?;
-            pid_file.write_all(&std::process::id().to_string().as_bytes())?;
+            pid_file.write_all(std::process::id().to_string().as_bytes())?;
             Ok(())
         }
         Ok(mut file_handle) => {
@@ -101,7 +110,7 @@ fn put_pid() -> std::io::Result<()> {
                 Err(_) => {
                     debug!("Pid from pid not alive, overwriting...");
                     let mut pid_file = fs::File::create(pid_path)?;
-                    pid_file.write_all(&std::process::id().to_string().as_bytes())?;
+                    pid_file.write_all(std::process::id().to_string().as_bytes())?;
                     Ok(())
                 }
             }
@@ -117,7 +126,9 @@ fn del_pid() -> std::io::Result<()> {
 }
 
 async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
-    let config = match config::Config::load() {
+    let args = Args::parse();
+
+    let config = match Config::load(args.config) {
         Ok(c) => c,
         Err(e) => {
             error!("{}", e);
@@ -125,35 +136,50 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         }
     };
 
-    let applications_handle = { tokio::spawn(async move { get_executable_names() }) };
-    let history_handle = {
+    let mut apps = selection::ElementListBuilder::new();
+    if args.from_path || (!args.from_stdin && args.from_file.is_empty()) {
+        apps.add_path();
+    }
+    if !args.from_file.is_empty() {
+        apps.add_files(&args.from_file);
+    }
+    if args.from_stdin {
+        apps.add_stdin();
+    }
+    let apps = apps.build();
+
+    let history = if (!args.from_stdin && args.from_file.is_empty()) || args.history.is_some() {
+        let path = args.history.clone();
         let decrease_interval = config.history.decrease_interval;
-        tokio::spawn(async move { history::get_history(decrease_interval) })
+        Some(tokio::task::spawn_blocking(move || {
+            History::load(path, decrease_interval)
+        }))
+    } else {
+        None
     };
-    let font_handle = {
-        let font = config.font.clone();
-        let font_size = config.font_size;
-        tokio::spawn(async move { font::Font::new(&font, font_size) })
+
+    let font = if let Some(font_name) = config.font {
+        let mut font_names = config.fonts.clone();
+        font_names.insert(0, font_name);
+        font::Font::new(font_names, config.font_size)
+    } else {
+        font::Font::new(config.fonts, config.font_size)
     };
 
     let (env, display, queue) =
         new_default_environment!(Env, fields = [layer_shell: SimpleGlobal::new(),])
             .expect("Initial roundtrip failed!");
 
-    let mut history = history_handle.await?.unwrap_or_default();
-    let mut applications = applications_handle.await?.unwrap();
-    for app in history.keys() {
-        applications.push(app.to_string());
-    }
-
-    applications.sort();
-    applications.dedup();
-    applications.sort_by(|a, b| {
-        history
-            .get(b)
-            .unwrap_or(&0)
-            .cmp(history.get(a).unwrap_or(&0))
-    });
+    let mut apps = apps.await?;
+    let history = match history {
+        Some(history) => {
+            let history = history.await??;
+            apps.merge_history(&history);
+            Some(history)
+        }
+        None => None,
+    };
+    apps.sort_score();
 
     let layer_shell = env.require_global::<zwlr_layer_shell_v1::ZwlrLayerShellV1>();
     let pools = env
@@ -169,20 +195,20 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
     gui::register_inputs(&env.get_all_seats(), &event_loop);
 
-    let mut matched_exe: Vec<&String> = applications.iter().collect();
+    let mut search_results = apps.as_ref_vec();
     let mut need_redraw = false;
-    let mut data = DData::new(&display, config.clone().into());
+    let mut data = DData::new(&display, config.keybindings.clone().into());
     let mut selection = 0;
     let mut select_query = false;
-
-    let mut font = font_handle.await?;
+    let mut font = font.await?;
 
     loop {
         let gui::DData { query, action, .. } = &mut data;
         match surface.next_render_event.take() {
             Some(RenderEvent::Closed) => break,
             Some(RenderEvent::Configure { width, height }) => {
-                need_redraw = surface.set_dimensions(width, height);
+                need_redraw = true;
+                surface.set_dimensions(width, height);
             }
             None => {}
         }
@@ -198,90 +224,55 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 }
                 Action::NavDown => {
                     need_redraw = true;
-                    if select_query && !matched_exe.is_empty() {
+                    if select_query && !search_results.is_empty() {
                         select_query = false;
-                    } else if !matched_exe.is_empty() && selection < matched_exe.len() - 1 {
+                    } else if !search_results.is_empty() && selection < search_results.len() - 1 {
                         selection += 1;
                     }
                 }
                 Action::Search => {
                     need_redraw = true;
-                    matched_exe = fuzzy_sort(&applications, query, &history);
+                    search_results = apps.search(query);
                     select_query = false;
                     selection = 0;
-                    if matched_exe.is_empty() {
+                    if search_results.is_empty() {
                         select_query = true
                     }
                 }
                 Action::Complete => {
                     if !select_query {
-                        let app = matched_exe.get(selection).unwrap();
-                        if query == *app {
-                            selection = if selection < matched_exe.len() - 1 {
+                        let app = search_results.get(selection).unwrap();
+                        if query == &app.name {
+                            selection = if selection < search_results.len() - 1 {
                                 selection + 1
                             } else {
                                 selection
                             };
                         }
                         query.clear();
-                        query.push_str(matched_exe.get(selection).unwrap());
+                        query.push_str(&search_results.get(selection).unwrap().name);
                         need_redraw = true;
                     }
                 }
                 Action::Execute => {
-                    let query = if select_query {
-                        query.to_string()
-                    } else {
-                        matched_exe.get(selection).unwrap().to_string()
-                    };
-                    if let Ok(mut args) = shellwords::split(&query) {
-                        match unsafe { fork() } {
-                            Ok(ForkResult::Parent { child }) => {
-                                return Ok(Some(tokio::spawn(async move {
-                                    tokio::time::sleep(Duration::new(1, 0)).await;
-                                    match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
-                                        Ok(WaitStatus::StillAlive)
-                                        | Ok(WaitStatus::Exited(_, 0)) => {
-                                            history.insert(
-                                                query.to_string(),
-                                                history.get(&query).unwrap_or(&0) + 1,
-                                            );
-                                            match history::commit_history(&history) {
-                                                Ok(_) => {}
-                                                Err(e) => {
-                                                    error!("{}", e.to_string())
-                                                }
-                                            };
-                                        }
-                                        Ok(_) => {
-                                            /* Every non 0 statuscode holds no information since it's
-                                            origin can be the started application or a file not found error.
-                                            In either case the error has already been logged and does not
-                                            need to be handled here. */
-                                        }
-                                        Err(err) => error!("{}", err),
-                                    }
-                                })));
-                            }
-                            Ok(ForkResult::Child) => {
-                                let err = exec::Command::new(args.remove(0)).args(&args).exec();
-
-                                // Won't be executed when exec was successful
-                                error!("{}", err);
-
-                                #[cfg(target_os = "linux")]
-                                Notification::new()
-                                    .summary("Kickoff")
-                                    .body(&format!("{}", err))
-                                    .timeout(5000)
-                                    .show()?;
-                                process::exit(2);
-                            }
-                            Err(err) => {
-                                error!("{}", err);
-                            }
+                    let element = if select_query {
+                        selection::Element {
+                            name: query.to_string(),
+                            value: query.to_string(),
+                            base_score: 0,
                         }
-                        break;
+                    } else {
+                        (*search_results.get(selection).unwrap()).clone()
+                    };
+                    if args.stdout {
+                        print!("{}", element.value);
+                        if let Some(mut history) = history {
+                            history.inc(&element);
+                            history.save()?;
+                        }
+                        return Ok(None);
+                    } else {
+                        return Ok(Some(exec(element, history)?));
                     }
                 }
                 Action::Exit => break,
@@ -292,18 +283,26 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
         if need_redraw {
             need_redraw = false;
 
-            let mut img = ImageBuffer::from_pixel(
-                surface.dimensions.0,
-                surface.dimensions.1,
-                config.colors.background.to_rgba(),
+            // adjust all components for Hidpi
+            let scale = surface.get_scale();
+            surface.set_scale(scale);
+            font.set_scale(scale);
+            let (width, height) = (
+                surface.dimensions.0 * scale as u32,
+                surface.dimensions.1 * scale as u32,
             );
+            let padding = config.padding * scale as u32;
+            let font_size = config.font_size * scale as f32;
+
+            let mut img =
+                ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
             let prompt_width = if !config.prompt.is_empty() {
                 let (width, _) = font.render(
                     &config.prompt,
                     &config.colors.prompt,
                     &mut img,
-                    config.padding,
-                    config.padding,
+                    padding,
+                    padding,
                 );
                 width
             } else {
@@ -316,28 +315,21 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 } else {
                     &config.colors.text_query
                 };
-                font.render(
-                    &query,
-                    color,
-                    &mut img,
-                    config.padding + prompt_width,
-                    config.padding,
-                );
+                font.render(query, color, &mut img, padding + prompt_width, padding);
             }
 
-            let spacer = (1.5 * config.font_size) as u32;
-            let max_entries = ((surface.dimensions.1 - 2 * config.padding - spacer) as f32
-                / (config.font_size * 1.2)) as usize;
+            let spacer = (1.5 * font_size) as u32;
+            let max_entries = ((height - 2 * padding - spacer) as f32 / (font_size * 1.2)) as usize;
             let offset = if selection > (max_entries / 2) {
-                (selection - max_entries / 2) as usize
+                selection - max_entries / 2
             } else {
                 0
             };
 
-            for (i, matched) in matched_exe
+            for (i, matched) in search_results
                 .iter()
                 .enumerate()
-                .take(cmp::min(max_entries + offset, matched_exe.len()))
+                .take(cmp::min(max_entries + offset, search_results.len()))
                 .skip(offset)
             {
                 let color = if i == selection && !select_query {
@@ -346,18 +338,15 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &config.colors.text
                 };
                 font.render(
-                    &matched,
+                    &matched.name,
                     color,
                     &mut img,
-                    config.padding,
-                    (config.padding
-                        + spacer
-                        + (i - offset) as u32 * (config.font_size * 1.2) as u32)
-                        as u32,
+                    padding,
+                    padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
                 );
             }
 
-            match surface.draw(&img) {
+            match surface.draw(img, scale) {
                 Ok(_) => {}
                 Err(e) => {
                     error!("{}", e);
@@ -372,55 +361,49 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     Ok(None)
 }
 
-fn get_executable_names() -> Option<Vec<String>> {
-    let var = match env::var_os("PATH") {
-        Some(var) => var,
-        None => return None,
-    };
-
-    let mut res: Vec<String> = Vec::new();
-
-    let paths_iter = env::split_paths(&var);
-    let dirs_iter = paths_iter.filter_map(|path| fs::read_dir(path).ok());
-
-    for dir in dirs_iter {
-        let executables_iter = dir.filter_map(|file| file.ok()).filter(|file| {
-            if let Ok(metadata) = file.metadata() {
-                return !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0;
-            }
-            false
-        });
-
-        for exe in executables_iter {
-            res.push(exe.file_name().to_str().unwrap().to_string());
+fn exec(
+    elem: selection::Element,
+    history: Option<History>,
+) -> Result<tokio::task::JoinHandle<()>, Box<dyn Error>> {
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { child }) => {
+            Ok(tokio::spawn(async move {
+                tokio::time::sleep(Duration::new(1, 0)).await;
+                match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                    Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
+                        if let Some(mut history) = history {
+                            history.inc(&elem);
+                            match history.save() {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    error!("{}", e);
+                                }
+                            };
+                        }
+                    }
+                    Ok(_) => {
+                        /* Every non 0 statuscode holds no information since it's
+                        origin can be the started application or a file not found error.
+                        In either case the error has already been logged and does not
+                        need to be handled here. */
+                    }
+                    Err(err) => error!("{}", err),
+                }
+            }))
         }
+        Ok(ForkResult::Child) => {
+            let err = exec::Command::new("sh").args(&["-c", &elem.value]).exec();
+
+            // Won't be executed when exec was successful
+            error!("{}", err);
+
+            Notification::new()
+                .summary("Kickoff")
+                .body(&format!("{}", err))
+                .timeout(5000)
+                .show()?;
+            process::exit(2);
+        }
+        Err(e) => Err(Box::new(e)),
     }
-
-    Some(res)
-}
-
-fn fuzzy_sort<'a>(
-    executables: &'a [String],
-    pattern: &str,
-    pre_scored: &'a HashMap<String, usize>,
-) -> Vec<&'a String> {
-    let matcher = SkimMatcherV2::default();
-    let mut executables = executables
-        .iter()
-        .map(|x| {
-            (
-                matcher
-                    .fuzzy_match(&x, &pattern)
-                    .map(|score| score + *pre_scored.get(x).unwrap_or(&1) as i64),
-                x,
-            )
-        })
-        .collect::<Vec<(Option<i64>, &String)>>();
-    executables.sort_by(|a, b| b.0.unwrap_or(0).cmp(&a.0.unwrap_or(0)));
-    executables
-        .into_iter()
-        .filter(|x| x.0.is_some())
-        .into_iter()
-        .map(|x| x.1)
-        .collect()
 }

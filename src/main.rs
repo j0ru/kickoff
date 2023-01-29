@@ -64,6 +64,7 @@ struct Args {
     history: Option<PathBuf>,
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
@@ -86,6 +87,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    if let Some(child_handle) = run().await? {
+        /* wait for check if comand exec was successful
+           and history has been written
+        */
+        child_handle.await?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
 fn put_pid() -> std::io::Result<()> {
     let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
     let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
@@ -118,6 +132,7 @@ fn put_pid() -> std::io::Result<()> {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn del_pid() -> std::io::Result<()> {
     let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
     let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();

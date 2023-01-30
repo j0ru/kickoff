@@ -16,9 +16,11 @@ use smithay_client_toolkit::{
     reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
+use std::fs;
+use std::io::{ErrorKind, Read, Write};
 use std::{cmp, error::Error, path::PathBuf, process, time::Duration};
 use tokio::task::JoinHandle;
-
+use xdg::BaseDirectories;
 mod color;
 mod config;
 mod font;
@@ -62,6 +64,30 @@ struct Args {
     history: Option<PathBuf>,
 }
 
+#[cfg(target_os = "linux")]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
+    match put_pid() {
+        Ok(()) => {
+            if let Some(child_handle) = run().await? {
+                /* wait for check if comand exec was successful
+                   and history has been written
+                */
+                child_handle.await?;
+            }
+            del_pid()?;
+            Ok(())
+        }
+        Err(e) => {
+            error!("{e}");
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(child_handle) = run().await? {
@@ -73,15 +99,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
-    env_logger::init();
+#[cfg(target_os = "linux")]
+fn put_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    match fs::File::open(pid_path.clone()) {
+        Err(_) => {
+            let mut pid_file = fs::File::create(pid_path)?;
+            pid_file.write_all(std::process::id().to_string().as_bytes())?;
+            Ok(())
+        }
+        Ok(mut file_handle) => {
+            debug!("Pid file already exists");
+            let mut pid = String::new();
+            file_handle.read_to_string(&mut pid)?;
+            match fs::metadata(format!("/proc/{pid}")) {
+                Ok(_) => {
+                    debug!("Pid from pid file still alive");
+                    Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        "Kickoff is already running",
+                    ))
+                }
+                Err(_) => {
+                    debug!("Pid from pid not alive, overwriting...");
+                    let mut pid_file = fs::File::create(pid_path)?;
+                    pid_file.write_all(std::process::id().to_string().as_bytes())?;
+                    Ok(())
+                }
+            }
+        }
+    }
+}
 
+#[cfg(target_os = "linux")]
+fn del_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    std::fs::remove_file(pid_path)?;
+    Ok(())
+}
+
+async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     let args = Args::parse();
 
     let config = match Config::load(args.config) {
         Ok(c) => c,
         Err(e) => {
-            error!("{}", e);
+            error!("{e}");
             process::exit(1);
         }
     };
@@ -299,7 +364,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
             match surface.draw(img, scale) {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     need_redraw = false;
                 }
             };
@@ -326,7 +391,7 @@ fn exec(
                             match history.save() {
                                 Ok(()) => {}
                                 Err(e) => {
-                                    error!("{}", e);
+                                    error!("{e}");
                                 }
                             };
                         }
@@ -337,7 +402,7 @@ fn exec(
                         In either case the error has already been logged and does not
                         need to be handled here. */
                     }
-                    Err(err) => error!("{}", err),
+                    Err(err) => error!("{err}"),
                 }
             }))
         }
@@ -345,11 +410,11 @@ fn exec(
             let err = exec::Command::new("sh").args(&["-c", &elem.value]).exec();
 
             // Won't be executed when exec was successful
-            error!("{}", err);
+            error!("{err}");
 
             Notification::new()
                 .summary("Kickoff")
-                .body(&format!("{}", err))
+                .body(&format!("{err}",))
                 .timeout(5000)
                 .show()?;
             process::exit(2);

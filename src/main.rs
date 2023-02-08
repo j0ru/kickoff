@@ -44,6 +44,10 @@ struct Args {
     #[clap(short, long)]
     config: Option<PathBuf>,
 
+    /// Set custom prompt, overwrites config if set
+    #[clap(short, long)]
+    prompt: Option<String>,
+
     /// Read list from stdin instead of PATH
     #[clap(long)]
     from_stdin: bool,
@@ -311,14 +315,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
             let mut img =
                 ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
-            let prompt_width = if !config.prompt.is_empty() {
-                let (width, _) = font.render(
-                    &config.prompt,
-                    &config.colors.prompt,
-                    &mut img,
-                    padding,
-                    padding,
-                );
+            let prompt = args.prompt.as_ref().unwrap_or(&config.prompt);
+            let prompt_width = if !prompt.is_empty() {
+                let (width, _) =
+                    font.render(prompt, &config.colors.prompt, &mut img, padding, padding);
                 width
             } else {
                 0

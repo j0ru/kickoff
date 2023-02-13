@@ -16,9 +16,11 @@ use smithay_client_toolkit::{
     reexports::{calloop, protocols::wlr::unstable::layer_shell::v1::client::zwlr_layer_shell_v1},
     WaylandSource,
 };
+use std::fs;
+use std::io::{ErrorKind, Read, Write};
 use std::{cmp, error::Error, path::PathBuf, process, time::Duration};
 use tokio::task::JoinHandle;
-
+use xdg::BaseDirectories;
 mod color;
 mod config;
 mod font;
@@ -42,6 +44,10 @@ struct Args {
     #[clap(short, long)]
     config: Option<PathBuf>,
 
+    /// Set custom prompt, overwrites config if set
+    #[clap(short, long)]
+    prompt: Option<String>,
+
     /// Read list from stdin instead of PATH
     #[clap(long)]
     from_stdin: bool,
@@ -62,6 +68,30 @@ struct Args {
     history: Option<PathBuf>,
 }
 
+#[cfg(target_os = "linux")]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
+    match put_pid() {
+        Ok(()) => {
+            if let Some(child_handle) = run().await? {
+                /* wait for check if comand exec was successful
+                   and history has been written
+                */
+                child_handle.await?;
+            }
+            del_pid()?;
+            Ok(())
+        }
+        Err(e) => {
+            error!("{e}");
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(child_handle) = run().await? {
@@ -73,9 +103,48 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
-    env_logger::init();
+#[cfg(target_os = "linux")]
+fn put_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    match fs::File::open(pid_path.clone()) {
+        Err(_) => {
+            let mut pid_file = fs::File::create(pid_path)?;
+            pid_file.write_all(std::process::id().to_string().as_bytes())?;
+            Ok(())
+        }
+        Ok(mut file_handle) => {
+            debug!("Pid file already exists");
+            let mut pid = String::new();
+            file_handle.read_to_string(&mut pid)?;
+            match fs::metadata(format!("/proc/{pid}")) {
+                Ok(_) => {
+                    debug!("Pid from pid file still alive");
+                    Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        "Kickoff is already running",
+                    ))
+                }
+                Err(_) => {
+                    debug!("Pid from pid not alive, overwriting...");
+                    let mut pid_file = fs::File::create(pid_path)?;
+                    pid_file.write_all(std::process::id().to_string().as_bytes())?;
+                    Ok(())
+                }
+            }
+        }
+    }
+}
 
+#[cfg(target_os = "linux")]
+fn del_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    std::fs::remove_file(pid_path)?;
+    Ok(())
+}
+
+async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     let args = Args::parse();
 
     let config = match Config::load(args.config) {
@@ -246,14 +315,10 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
 
             let mut img =
                 ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
-            let prompt_width = if !config.prompt.is_empty() {
-                let (width, _) = font.render(
-                    &config.prompt,
-                    &config.colors.prompt,
-                    &mut img,
-                    padding,
-                    padding,
-                );
+            let prompt = args.prompt.as_ref().unwrap_or(&config.prompt);
+            let prompt_width = if !prompt.is_empty() {
+                let (width, _) =
+                    font.render(prompt, &config.colors.prompt, &mut img, padding, padding);
                 width
             } else {
                 0

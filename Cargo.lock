@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "kickoff"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "clap 4.1.1",
  "criterion",

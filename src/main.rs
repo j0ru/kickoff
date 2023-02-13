@@ -81,7 +81,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     let config = match Config::load(args.config) {
         Ok(c) => c,
         Err(e) => {
-            error!("{}", e);
+            error!("{e}");
             process::exit(1);
         }
     };
@@ -299,7 +299,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
             match surface.draw(img, scale) {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{e}");
                     need_redraw = false;
                 }
             };
@@ -326,7 +326,7 @@ fn exec(
                             match history.save() {
                                 Ok(()) => {}
                                 Err(e) => {
-                                    error!("{}", e);
+                                    error!("{e}");
                                 }
                             };
                         }
@@ -337,7 +337,7 @@ fn exec(
                         In either case the error has already been logged and does not
                         need to be handled here. */
                     }
-                    Err(err) => error!("{}", err),
+                    Err(err) => error!("{err}"),
                 }
             }))
         }
@@ -345,11 +345,11 @@ fn exec(
             let err = exec::Command::new("sh").args(&["-c", &elem.value]).exec();
 
             // Won't be executed when exec was successful
-            error!("{}", err);
+            error!("{err}");
 
             Notification::new()
                 .summary("Kickoff")
-                .body(&format!("{}", err))
+                .body(&format!("{err}"))
                 .timeout(5000)
                 .show()?;
             process::exit(2);

@@ -107,9 +107,12 @@ impl Font {
                     let x = glyph.x + x_offset as f32 + (i % glyph.width) as f32;
                     let y = glyph.y + y_offset as f32 + (i / glyph.width) as f32;
 
-                    image
-                        .get_pixel_mut(x as u32, y as u32)
-                        .blend(&image::Rgba([color.0, color.1, color.2, *alpha]));
+                    match image.get_pixel_mut_checked(x as u32, y as u32) {
+                        Some(pixel) => {
+                            pixel.blend(&image::Rgba([color.0, color.1, color.2, *alpha]))
+                        }
+                        None => continue,
+                    }
                 }
             }
         }

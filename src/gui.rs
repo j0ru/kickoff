@@ -231,7 +231,7 @@ pub fn register_inputs(
                     RepeatKind::System,
                     move |event, _, ddata| process_keyboard_event(event, ddata),
                 ) {
-                    error!("Failed to map keyboard on seat {} : {:?}.", name, err)
+                    error!("Failed to map keyboard on seat {name} : {err:?}.")
                 }
             }
         }

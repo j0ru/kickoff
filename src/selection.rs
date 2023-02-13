@@ -153,7 +153,7 @@ impl ElementListBuilder {
                     Ok(None) => continue,
                     Ok(Some(res)) => res,
                     Err(e) => {
-                        error!("Failed parsing {}", e);
+                        error!("Failed parsing {e}");
                         continue;
                     }
                 };
@@ -218,7 +218,7 @@ impl ElementListBuilder {
                 Ok(None) => continue,
                 Ok(Some(res)) => res,
                 Err(e) => {
-                    error!("Failed parsing {}", e);
+                    error!("Failed parsing {e}");
                     continue;
                 }
             };

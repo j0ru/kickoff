@@ -414,7 +414,7 @@ fn exec(
 
             Notification::new()
                 .summary("Kickoff")
-                .body(&format!("{err}",))
+                .body(&format!("{err}"))
                 .timeout(5000)
                 .show()?;
             process::exit(2);

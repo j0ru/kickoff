@@ -11,7 +11,6 @@ readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
-wayland-client = "0.30"
 smithay-client-toolkit = "0.15"
 fontdue = "0.7"
 image = { version = "0.24", default-features = false }
@@ -32,7 +31,6 @@ notify-rust = "4.7"
 clap = { version = "4.1", features = ["derive"] }
 csv = "1.2"
 futures = "0.3"
-nom = "7.1"
 
 [dependencies.tokio]
 version = "1.25"

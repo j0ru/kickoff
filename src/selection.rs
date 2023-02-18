@@ -1,15 +1,6 @@
 use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::*;
-use nom::{
-    branch::alt,
-    bytes::complete::is_not,
-    character::complete::char,
-    combinator::opt,
-    sequence::pair,
-    sequence::{delimited, preceded},
-    Finish, IResult,
-};
 use std::fs::File;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
@@ -150,12 +141,8 @@ impl ElementListBuilder {
             let mut buf = String::new();
             while reader.read_line(&mut buf)? > 0 {
                 let kv_pair = match parse_line(&buf) {
-                    Ok(None) => continue,
-                    Ok(Some(res)) => res,
-                    Err(e) => {
-                        error!("Failed parsing {e}");
-                        continue;
-                    }
+                    None => continue,
+                    Some(res) => res,
                 };
                 match kv_pair {
                     (key, Some(value)) => res.push(Element {
@@ -215,12 +202,8 @@ impl ElementListBuilder {
 
         while let Some(line) = lines.next_line().await? {
             let kv_pair = match parse_line(&line) {
-                Ok(None) => continue,
-                Ok(Some(res)) => res,
-                Err(e) => {
-                    error!("Failed parsing {e}");
-                    continue;
-                }
+                None => continue,
+                Some(res) => res,
             };
             match kv_pair {
                 (key, Some(value)) => res.push(Element {
@@ -242,26 +225,43 @@ impl ElementListBuilder {
 }
 
 #[allow(clippy::type_complexity)]
-fn parse_line<'a>(
-    input: &'a str,
-) -> Result<Option<(&str, Option<&str>)>, Box<dyn std::error::Error + 'a>> {
-    let input = input.trim_end();
-    match pair(
-        alt((is_not("\"="), quoted_string)),
-        opt(preceded(char('='), alt((is_not("\""), quoted_string)))),
-    )(input)
-    .finish()
-    {
-        Ok(("", ("", None))) => Ok(None),
-        Ok(("", res)) => Ok(Some(res)),
-        Ok((unparsed, _res)) => {
-            warn!("Input was not fully consumed: {unparsed}");
-            Ok(None)
-        }
-        Err(e) => Err(Box::new(e)),
+fn parse_line(input: &str) -> Option<(&str, Option<&str>)> {
+    let input = input.trim();
+    let parts = input
+        .splitn(2, '=')
+        .map(|s| s.trim())
+        .collect::<Vec<&str>>();
+
+    if parts.is_empty() {
+        warn!("Failed to pares line: {input}");
+        None
+    } else {
+        Some((parts.first().unwrap(), parts.get(1).copied()))
     }
 }
 
-fn quoted_string(input: &str) -> IResult<&str, &str> {
-    delimited(char('"'), is_not("\""), char('"'))(input)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_line_test() {
+        assert_eq!(parse_line("foobar"), Some(("foobar", None)));
+        assert_eq!(parse_line("foo=bar"), Some(("foo", Some("bar"))));
+        assert_eq!(
+            parse_line("foo=bar\"baz\""),
+            Some(("foo", Some("bar\"baz\"")))
+        );
+        assert_eq!(
+            parse_line(
+                r#"Desktop: Firefox Developer Edition - New Window=/usr/lib/firefox-developer-edition/firefox --class="firefoxdeveloperedition" --new-window %u"#
+            ),
+            Some((
+                "Desktop: Firefox Developer Edition - New Window",
+                Some(
+                    r#"/usr/lib/firefox-developer-edition/firefox --class="firefoxdeveloperedition" --new-window %u"#
+                )
+            ))
+        )
+    }
 }

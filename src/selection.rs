@@ -139,22 +139,29 @@ impl ElementListBuilder {
         for file in files {
             let mut reader = BufReader::new(File::open(file)?);
             let mut buf = String::new();
+            let mut base_score = 0;
+
             while reader.read_line(&mut buf)? > 0 {
                 let kv_pair = match parse_line(&buf) {
                     None => continue,
                     Some(res) => res,
                 };
                 match kv_pair {
+                    ("%base_score", Some(value)) => {
+                        if let Ok(value) = value.parse::<usize>() {
+                            base_score = value
+                        }
+                    }
                     (key, Some(value)) => res.push(Element {
                         name: key.to_string(),
                         value: value.to_string(),
-                        base_score: 0,
+                        base_score,
                     }),
                     ("", None) => {} // Empty Line
                     (key, None) => res.push(Element {
                         name: key.to_string(),
                         value: key.to_string(),
-                        base_score: 0,
+                        base_score,
                     }),
                 }
 
@@ -199,6 +206,7 @@ impl ElementListBuilder {
         let reader = io::BufReader::new(stdin);
         let mut lines = reader.lines();
         let mut res = Vec::new();
+        let mut base_score = 0;
 
         while let Some(line) = lines.next_line().await? {
             let kv_pair = match parse_line(&line) {
@@ -206,16 +214,21 @@ impl ElementListBuilder {
                 Some(res) => res,
             };
             match kv_pair {
+                ("%base_score", Some(value)) => {
+                    if let Ok(value) = value.parse::<usize>() {
+                        base_score = value
+                    }
+                }
                 (key, Some(value)) => res.push(Element {
                     name: key.to_string(),
                     value: value.to_string(),
-                    base_score: 0,
+                    base_score,
                 }),
                 ("", None) => {} // Empty Line
                 (key, None) => res.push(Element {
                     name: key.to_string(),
                     value: key.to_string(),
-                    base_score: 0,
+                    base_score,
                 }),
             }
         }

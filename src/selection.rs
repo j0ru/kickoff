@@ -225,18 +225,18 @@ impl ElementListBuilder {
 }
 
 #[allow(clippy::type_complexity)]
-fn parse_line<'a>(input: &'a str) -> Option<(&str, Option<&str>)> {
+fn parse_line(input: &str) -> Option<(&str, Option<&str>)> {
     let input = input.trim();
     let parts = input
         .splitn(2, '=')
         .map(|s| s.trim())
         .collect::<Vec<&str>>();
 
-    if parts.len() == 0 {
+    if parts.is_empty() {
         warn!("Failed to pares line: {input}");
-        return None;
+        None
     } else {
-        return Some((parts.get(0).unwrap(), parts.get(1).copied()));
+        Some((parts.first().unwrap(), parts.get(1).copied()))
     }
 }
 

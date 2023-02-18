@@ -82,10 +82,13 @@ impl Font {
         image: &mut RgbaImage,
         x_offset: u32,
         y_offset: u32,
+        max_width: Option<usize>,
     ) -> (u32, u32) {
         let mut width = 0;
+        let mut current_width = 0.;
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
+
         for c in text.chars() {
             let mut font_index = 0;
             for (i, font) in self.fonts.iter().enumerate() {
@@ -101,7 +104,13 @@ impl Font {
         }
 
         for glyph in layout.glyphs() {
-            let (_, bitmap) = self.render_glyph(glyph.key);
+            if let Some(max_width) = max_width {
+                if current_width as usize + glyph.width > max_width {
+                    break;
+                }
+            }
+            let (metrics, bitmap) = self.render_glyph(glyph.key);
+            current_width += metrics.advance_width;
             for (i, alpha) in bitmap.iter().enumerate() {
                 if alpha != &0 {
                     let x = glyph.x + x_offset as f32 + (i % glyph.width) as f32;

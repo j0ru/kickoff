@@ -317,8 +317,14 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
             let prompt = args.prompt.as_ref().unwrap_or(&config.prompt);
             let prompt_width = if !prompt.is_empty() {
-                let (width, _) =
-                    font.render(prompt, &config.colors.prompt, &mut img, padding, padding);
+                let (width, _) = font.render(
+                    prompt,
+                    &config.colors.prompt,
+                    &mut img,
+                    padding,
+                    padding,
+                    None,
+                );
                 width
             } else {
                 0
@@ -330,7 +336,14 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                 } else {
                     &config.colors.text_query
                 };
-                font.render(query, color, &mut img, padding + prompt_width, padding);
+                font.render(
+                    query,
+                    color,
+                    &mut img,
+                    padding + prompt_width,
+                    padding,
+                    None,
+                );
             }
 
             let spacer = (1.5 * font_size) as u32;
@@ -358,6 +371,7 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     &mut img,
                     padding,
                     padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
+                    Some((width - (padding * 2)) as usize),
                 );
             }
 

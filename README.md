@@ -89,12 +89,12 @@ Currently, there is only one, but more might be added someday:
 
 |Word|Argument|Usage|Default|
 |----|--------|-----|-------|
-|base_score| number | Sets the base score for all following entries, can be overwritten later | 0 |
+|%base_score| number | Sets the base score for all following entries, can be overwritten later | 0 |
 
 In this example, `Small kitty` has a base score of 0, while the others have a score of 5.
 ```
 Small kitty = kitty -o "font_size=5"
-$base_score = 5
+%base_score = 5
 Big kitty = kitty -o "font_size=20"
 Medium kitty = kitty -o "font_size=12"
 ```

@@ -87,6 +87,10 @@ Displayed Name         |
 When reading from a file or stdin, you can use magic words to influence the generated items.
 Currently, there is only one, but more might be added someday:
 
+|Word|Argument|Usage|Default|
+|----|--------|-----|-------|
+|base_score| number | Sets the base score for all following entries, can be overwritten later | 0 |
+
 In this example, `Small kitty` has a base score of 0, while the others have a score of 5.
 ```
 Small kitty = kitty -o "font_size=5"

@@ -6,12 +6,13 @@ prompt = ''
 # space between window border and the content in pixel
 padding = 100
 
-# font = ''        # has been deprecated in favour of fonts list
-fonts = ['Noto Sans Mono']     # list of otf or ttf fonts. later elements work as fallback
+fonts = [
+    'Noto Sans Mono',
+] # list of otf or ttf fonts. later elements work as fallback
 font_size = 32.0
 
 [history]
-decrease_interval = 48 # interval to decrease the number of launches
+decrease_interval = 48 # interval to decrease the number of launches in hours
 
 [colors]
 # color format: rgb or rgba, if transparency is desired

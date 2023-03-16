@@ -1,6 +1,6 @@
 use crate::history::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use log::*;
+use log::warn;
 use std::fs::File;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
@@ -21,7 +21,7 @@ pub struct Element {
 }
 
 impl Ord for Element {
-    fn cmp(&self, other: &Element) -> Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         match other.base_score.cmp(&self.base_score) {
             Ordering::Equal => self.name.cmp(&other.name),
             e => e,
@@ -30,7 +30,7 @@ impl Ord for Element {
 }
 
 impl PartialOrd for Element {
-    fn partial_cmp(&self, other: &Element) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match other.base_score.cmp(&self.base_score) {
             Ordering::Equal => Some(self.name.cmp(&other.name)),
             e => Some(e),
@@ -50,18 +50,19 @@ impl ElementList {
                 elem.base_score = entry.num_used;
             } else {
                 self.inner.push(Element {
-                    name: entry.name.to_owned(),
-                    value: entry.value.to_owned(),
+                    name: entry.name.clone(),
+                    value: entry.value.clone(),
                     base_score: entry.num_used,
-                })
+                });
             }
         }
     }
 
     pub fn sort_score(&mut self) {
-        self.inner.sort_by(|a, b| b.base_score.cmp(&a.base_score))
+        self.inner.sort_by(|a, b| b.base_score.cmp(&a.base_score));
     }
 
+    #[must_use]
     pub fn search(&self, pattern: &str) -> Vec<&Element> {
         let matcher = SkimMatcherV2::default();
         let mut executables = self
@@ -81,6 +82,7 @@ impl ElementList {
         executables.into_iter().map(|x| x.1).collect()
     }
 
+    #[must_use]
     pub fn as_ref_vec(&self) -> Vec<&Element> {
         self.inner.iter().collect()
     }
@@ -94,8 +96,9 @@ pub struct ElementListBuilder {
 }
 
 impl ElementListBuilder {
-    pub fn new() -> ElementListBuilder {
-        ElementListBuilder::default()
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn add_path(&mut self) {
@@ -111,16 +114,14 @@ impl ElementListBuilder {
     pub async fn build(&self) -> Result<ElementList, Box<dyn std::error::Error>> {
         let mut fut = Vec::new();
         if self.from_stdin {
-            fut.push(spawn(ElementListBuilder::build_stdin()))
+            fut.push(spawn(Self::build_stdin()));
         }
         if !self.from_file.is_empty() {
             let files = self.from_file.clone();
-            fut.push(spawn_blocking(move || {
-                ElementListBuilder::build_files(&files)
-            }))
+            fut.push(spawn_blocking(move || Self::build_files(&files)));
         }
         if self.from_path {
-            fut.push(spawn_blocking(ElementListBuilder::build_path))
+            fut.push(spawn_blocking(Self::build_path));
         }
 
         let finished = futures::future::join_all(fut).await;
@@ -142,14 +143,13 @@ impl ElementListBuilder {
             let mut base_score = 0;
 
             while reader.read_line(&mut buf)? > 0 {
-                let kv_pair = match parse_line(&buf) {
-                    None => continue,
-                    Some(res) => res,
+                let Some(kv_pair) =  parse_line(&buf) else {
+                    continue;
                 };
                 match kv_pair {
                     ("%base_score", Some(value)) => {
                         if let Ok(value) = value.parse::<usize>() {
-                            base_score = value
+                            base_score = value;
                         }
                     }
                     (key, Some(value)) => res.push(Element {
@@ -181,7 +181,7 @@ impl ElementListBuilder {
         let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
 
         for dir in dirs_iter {
-            dir.filter_map(|file| file.ok()).for_each(|file| {
+            dir.filter_map(std::result::Result::ok).for_each(|file| {
                 if let Ok(metadata) = file.metadata() {
                     if !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0 {
                         let name = file.file_name().to_str().unwrap().to_string();
@@ -209,14 +209,13 @@ impl ElementListBuilder {
         let mut base_score = 0;
 
         while let Some(line) = lines.next_line().await? {
-            let kv_pair = match parse_line(&line) {
-                None => continue,
-                Some(res) => res,
+            let Some(kv_pair) =  parse_line(&line) else {
+                continue
             };
             match kv_pair {
                 ("%base_score", Some(value)) => {
                     if let Ok(value) = value.parse::<usize>() {
-                        base_score = value
+                        base_score = value;
                     }
                 }
                 (key, Some(value)) => res.push(Element {
@@ -240,17 +239,15 @@ impl ElementListBuilder {
 #[allow(clippy::type_complexity)]
 fn parse_line(input: &str) -> Option<(&str, Option<&str>)> {
     let input = input.trim();
-    let parts = input
-        .splitn(2, '=')
-        .map(|s| s.trim())
-        .collect::<Vec<&str>>();
+    let parts = input.splitn(2, '=').map(str::trim).collect::<Vec<&str>>();
 
-    if parts.is_empty() {
-        warn!("Failed to pares line: {input}");
-        None
-    } else {
-        Some((parts.first().unwrap(), parts.get(1).copied()))
-    }
+    parts.first().map_or_else(
+        || {
+            warn!("Failed to pares line: {input}");
+            None
+        },
+        |part| Some((*part, parts.get(1).copied())),
+    )
 }
 
 #[cfg(test)]
@@ -275,6 +272,6 @@ mod tests {
                     r#"/usr/lib/firefox-developer-edition/firefox --class="firefoxdeveloperedition" --new-window %u"#
                 )
             ))
-        )
+        );
     }
 }

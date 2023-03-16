@@ -52,7 +52,7 @@ pub struct Config {
 
 impl Default for KeybindingsConfig {
     fn default() -> Self {
-        KeybindingsConfig {
+        Self {
             delete: vec![
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_BackSpace),
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Delete),
@@ -111,7 +111,7 @@ impl Default for KeybindingsConfig {
 }
 impl Default for ColorConfig {
     fn default() -> Self {
-        ColorConfig {
+        Self {
             background: Color(40, 44, 52, 170),
             prompt: Color(171, 178, 191, 255),
             text: Color(255, 255, 255, 255),
@@ -122,8 +122,8 @@ impl Default for ColorConfig {
 }
 impl Default for Config {
     fn default() -> Self {
-        Config {
-            prompt: "".to_owned(),
+        Self {
+            prompt: String::new(),
             padding: 100,
             font: None,
             fonts: vec![],
@@ -136,7 +136,7 @@ impl Default for Config {
 }
 impl Default for HistoryConfig {
     fn default() -> Self {
-        HistoryConfig {
+        Self {
             decrease_interval: 48,
         }
     }

@@ -1,9 +1,13 @@
+#![deny(clippy::all)]
+#![warn(clippy::nursery)]
+#![warn(clippy::unwrap_used)]
+
 use crate::config::Config;
 use crate::gui::{Action, DData, RenderEvent};
 use clap::Parser;
 use history::History;
 use image::ImageBuffer;
-use log::*;
+use log::{debug, error, warn};
 use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
@@ -74,14 +78,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     match put_pid() {
-        Ok(()) => {
+        Ok(pid_path) => {
             if let Some(child_handle) = run().await? {
                 /* wait for check if comand exec was successful
                    and history has been written
                 */
                 child_handle.await?;
             }
-            del_pid()?;
+            del_pid(pid_path)?;
             Ok(())
         }
         Err(e) => {
@@ -104,44 +108,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[cfg(target_os = "linux")]
-fn put_pid() -> std::io::Result<()> {
+fn put_pid() -> std::io::Result<PathBuf> {
     let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
     let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
     match fs::File::open(pid_path.clone()) {
         Err(_) => {
-            let mut pid_file = fs::File::create(pid_path)?;
+            let mut pid_file = fs::File::create(&pid_path)?;
             pid_file.write_all(std::process::id().to_string().as_bytes())?;
-            Ok(())
+            Ok(pid_path)
         }
         Ok(mut file_handle) => {
             debug!("Pid file already exists");
             let mut pid = String::new();
             file_handle.read_to_string(&mut pid)?;
-            match fs::metadata(format!("/proc/{pid}")) {
-                Ok(_) => {
-                    debug!("Pid from pid file still alive");
-                    Err(std::io::Error::new(
-                        ErrorKind::Other,
-                        "Kickoff is already running",
-                    ))
-                }
-                Err(_) => {
-                    debug!("Pid from pid not alive, overwriting...");
-                    let mut pid_file = fs::File::create(pid_path)?;
-                    pid_file.write_all(std::process::id().to_string().as_bytes())?;
-                    Ok(())
-                }
+            if fs::metadata(format!("/proc/{pid}")).is_ok() {
+                debug!("Pid from pid file still alive");
+                Err(std::io::Error::new(
+                    ErrorKind::Other,
+                    "Kickoff is already running",
+                ))
+            } else {
+                debug!("Pid from pid not alive, overwriting...");
+                let mut pid_file = fs::File::create(&pid_path)?;
+                pid_file.write_all(std::process::id().to_string().as_bytes())?;
+                Ok(pid_path)
             }
         }
     }
 }
 
 #[cfg(target_os = "linux")]
-fn del_pid() -> std::io::Result<()> {
-    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
-    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
-    std::fs::remove_file(pid_path)?;
-    Ok(())
+fn del_pid(pid_path: PathBuf) -> std::io::Result<()> {
+    std::fs::remove_file(pid_path)
 }
 
 async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
@@ -207,10 +205,11 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     let surface = env.create_surface().detach();
     let mut surface = gui::Surface::new(None, surface, &layer_shell, pools);
 
-    let mut event_loop = calloop::EventLoop::<DData>::try_new().unwrap();
+    let mut event_loop =
+        calloop::EventLoop::<DData>::try_new().expect("Failed to create event_loop");
     WaylandSource::new(queue)
         .quick_insert(event_loop.handle())
-        .unwrap();
+        .expect("Failed to insert WaylandSource into the event_loop");
 
     gui::register_inputs(&env.get_all_seats(), &event_loop);
 
@@ -255,12 +254,14 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     select_query = false;
                     selection = 0;
                     if search_results.is_empty() {
-                        select_query = true
+                        select_query = true;
                     }
                 }
                 Action::Complete => {
                     if !select_query {
-                        let app = search_results.get(selection).unwrap();
+                        let app = search_results
+                            .get(selection)
+                            .expect("Selection is outside of available elements");
                         if query == &app.name {
                             selection = if selection < search_results.len() - 1 {
                                 selection + 1
@@ -269,19 +270,27 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                             };
                         }
                         query.clear();
-                        query.push_str(&search_results.get(selection).unwrap().name);
+                        query.push_str(
+                            &search_results
+                                .get(selection)
+                                .expect("Selection is outside of available elements")
+                                .name,
+                        );
                         need_redraw = true;
                     }
                 }
                 Action::Execute => {
                     let element = if select_query {
                         selection::Element {
-                            name: query.to_string(),
-                            value: query.to_string(),
+                            name: (*query).to_string(),
+                            value: (*query).to_string(),
                             base_score: 0,
                         }
                     } else {
-                        (*search_results.get(selection).unwrap()).clone()
+                        (*search_results
+                            .get(selection)
+                            .expect("Selection is outside of available elements"))
+                        .clone()
                     };
                     if args.stdout {
                         print!("{}", element.value);
@@ -290,9 +299,8 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                             history.save()?;
                         }
                         return Ok(None);
-                    } else {
-                        return Ok(Some(exec(element, history)?));
                     }
+                    return Ok(Some(exec(element, history)?));
                 }
                 Action::Exit => break,
                 _ => {}
@@ -316,7 +324,9 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
             let mut img =
                 ImageBuffer::from_pixel(width, height, config.colors.background.to_rgba());
             let prompt = args.prompt.as_ref().unwrap_or(&config.prompt);
-            let prompt_width = if !prompt.is_empty() {
+            let prompt_width = if prompt.is_empty() {
+                0
+            } else {
                 let (width, _) = font.render(
                     prompt,
                     &config.colors.prompt,
@@ -326,8 +336,6 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
                     None,
                 );
                 width
-            } else {
-                0
             };
 
             if !query.is_empty() {
@@ -384,8 +392,12 @@ async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
             };
         }
 
-        display.flush().unwrap();
-        event_loop.dispatch(None, &mut data).unwrap();
+        display
+            .flush()
+            .expect("Failed to flush messages to compositor");
+        event_loop
+            .dispatch(None, &mut data)
+            .expect("Failed to dispatch events");
     }
     Ok(None)
 }
@@ -399,7 +411,7 @@ fn exec(
             Ok(tokio::spawn(async move {
                 tokio::time::sleep(Duration::new(1, 0)).await;
                 match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
-                    Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
+                    Ok(WaitStatus::StillAlive | WaitStatus::Exited(_, 0)) => {
                         if let Some(mut history) = history {
                             history.inc(&elem);
                             match history.save() {

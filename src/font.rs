@@ -1,6 +1,7 @@
 use crate::color::Color;
 use fontdue::layout::{CoordinateSystem, GlyphRasterConfig, Layout, LayoutSettings, TextStyle};
 use fontdue::Metrics;
+use log::warn;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,7 +24,7 @@ pub struct Font {
 }
 
 impl Font {
-    pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Font> {
+    pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Self> {
         let fc = Fontconfig::new().expect("Couldn't load fontconfig");
         let font_names = if font_names.is_empty() {
             vec![String::new()]
@@ -32,22 +33,23 @@ impl Font {
         };
         let font_paths: Vec<PathBuf> = font_names
             .iter()
-            .map(|name| fc.find(name, None).unwrap().path)
+            .filter_map(|name| fc.find(name, None).map(|f| f.path))
             .collect();
         let mut font_data = Vec::new();
 
         for font_path in font_paths {
             let mut font_buffer = Vec::new();
-            File::open(font_path.to_str().unwrap())
+            File::open(font_path)
                 .await?
                 .read_to_end(&mut font_buffer)
                 .await?;
-            font_data.push(
-                fontdue::Font::from_bytes(font_buffer, fontdue::FontSettings::default()).unwrap(),
-            );
+            match fontdue::Font::from_bytes(font_buffer, fontdue::FontSettings::default()) {
+                Ok(font) => font_data.push(font),
+                Err(e) => warn!("failed to add font: {e}"),
+            }
         }
 
-        Ok(Font {
+        Ok(Self {
             fonts: font_data,
             layout: RefCell::new(Layout::new(CoordinateSystem::PositiveYDown)),
             size,
@@ -62,6 +64,8 @@ impl Font {
 
     fn render_glyph(&self, conf: GlyphRasterConfig) -> (Metrics, Vec<u8>) {
         let mut glyph_cache = self.glyph_cache.borrow_mut();
+
+        #[allow(clippy::option_if_let_else)]
         if let Some(bitmap) = glyph_cache.get(&conf) {
             bitmap.clone()
         } else {
@@ -70,7 +74,9 @@ impl Font {
                 .iter()
                 .filter(|f| (*f).file_hash() == conf.font_hash)
                 .collect();
-            glyph_cache.insert(conf, font.first().unwrap().rasterize_config(conf));
+            if let Some(font) = font.first() {
+                glyph_cache.insert(conf, font.rasterize_config(conf));
+            }
             glyph_cache.get(&conf).unwrap().clone()
         }
     }
@@ -118,7 +124,7 @@ impl Font {
 
                     match image.get_pixel_mut_checked(x as u32, y as u32) {
                         Some(pixel) => {
-                            pixel.blend(&image::Rgba([color.0, color.1, color.2, *alpha]))
+                            pixel.blend(&image::Rgba([color.0, color.1, color.2, *alpha]));
                         }
                         None => continue,
                     }

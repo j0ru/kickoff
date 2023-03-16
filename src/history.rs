@@ -1,6 +1,6 @@
 extern crate xdg;
 
-use log::*;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -9,7 +9,7 @@ use xdg::BaseDirectories;
 use crate::selection::Element;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct HistoryEntry {
+pub struct Entry {
     pub name: String,
     pub value: String,
     pub num_used: usize,
@@ -17,12 +17,13 @@ pub struct HistoryEntry {
 
 #[derive(Debug)]
 pub struct History {
-    entries: Vec<HistoryEntry>,
+    entries: Vec<Entry>,
     path: PathBuf,
 }
 
 impl History {
-    pub fn as_vec(&self) -> &Vec<HistoryEntry> {
+    #[must_use]
+    pub const fn as_vec(&self) -> &Vec<Entry> {
         &self.entries
     }
 
@@ -34,14 +35,14 @@ impl History {
             if let Some(path) = xdg_dirs.find_cache_file("default.csv") {
                 path
             } else {
-                return Ok(History {
+                return Ok(Self {
                     entries: Vec::new(),
                     path: xdg_dirs.place_cache_file("default.csv")?,
                 });
             }
         };
 
-        let mut res = History {
+        let mut res = Self {
             entries: Vec::new(),
             path: history_path.clone(),
         };
@@ -65,7 +66,7 @@ impl History {
 
             let mut rdr = csv::Reader::from_path(history_path).unwrap();
             for result in rdr.deserialize() {
-                let mut record: HistoryEntry = result?;
+                let mut record: Entry = result?;
                 record.num_used = record.num_used.saturating_sub(interval_diff as usize);
                 if record.num_used > 0 {
                     res.entries.push(record);
@@ -81,13 +82,13 @@ impl History {
     pub fn inc(&mut self, element: &Element) {
         if let Some(entry) = self.entries.iter_mut().find(|x| x.name == element.name) {
             entry.num_used += 1;
-            entry.value = element.value.to_owned();
+            entry.value = element.value.clone();
         } else {
-            self.entries.push(HistoryEntry {
-                name: element.name.to_owned(),
-                value: element.value.to_owned(),
+            self.entries.push(Entry {
+                name: element.name.clone(),
+                value: element.value.clone(),
                 num_used: 1,
-            })
+            });
         }
     }
 

@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use tokio::runtime::Builder;
 
-use kickoff::selection::*;
+use kickoff::selection::ElementListBuilder;
 
 fn bench_build(c: &mut Criterion) {
     c.bench_function("build_path", |b| {
@@ -10,7 +10,7 @@ fn bench_build(c: &mut Criterion) {
                 let mut element_build = ElementListBuilder::new();
                 element_build.add_path();
                 element_build.build().await.unwrap();
-            })
+            });
     });
 }
 

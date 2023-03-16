@@ -24,7 +24,7 @@ use smithay_client_toolkit::{
 
 use smithay_clipboard::Clipboard;
 
-use log::*;
+use log::error;
 use std::cell::Cell;
 use std::io::{BufWriter, ErrorKind, Seek, Write};
 use std::rc::Rc;
@@ -49,11 +49,11 @@ pub struct Surface {
 
 impl Surface {
     pub fn set_dimensions(&mut self, width: u32, height: u32) -> bool {
-        if self.dimensions != (width, height) {
+        if self.dimensions == (width, height) {
+            false
+        } else {
             self.dimensions = (width, height);
             true
-        } else {
-            false
         }
     }
     pub fn new(
@@ -186,10 +186,10 @@ pub struct DData {
 }
 
 impl DData {
-    pub fn new(display: &Display, keybindings: Keybindings) -> DData {
-        let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
-        DData {
-            query: "".to_string(),
+    pub fn new(display: &Display, keybindings: Keybindings) -> Self {
+        let clipboard = unsafe { Clipboard::new(display.get_display_ptr().cast()) };
+        Self {
+            query: String::new(),
             action: None,
             modifiers: ModifiersState::default(),
             clipboard,
@@ -211,7 +211,7 @@ pub fn register_inputs(
         }) {
             if has_ptr {
                 let pointer = seat.get_pointer();
-                pointer.quick_assign(move |_, event, ddata| process_pointer_event(event, ddata));
+                pointer.quick_assign(move |_, event, ddata| process_pointer_event(&event, ddata));
             }
         }
     }
@@ -231,14 +231,14 @@ pub fn register_inputs(
                     RepeatKind::System,
                     move |event, _, ddata| process_keyboard_event(event, ddata),
                 ) {
-                    error!("Failed to map keyboard on seat {name} : {err:?}.")
+                    error!("Failed to map keyboard on seat {name} : {err:?}.");
                 }
             }
         }
     }
 }
 
-fn process_pointer_event(event: PEvent, mut data: DispatchData) {
+fn process_pointer_event(event: &PEvent, mut data: DispatchData) {
     let DData {
         query,
         action,
@@ -246,7 +246,7 @@ fn process_pointer_event(event: PEvent, mut data: DispatchData) {
         ..
     } = data.get::<DData>().unwrap();
     if let PEvent::Button { button, state, .. } = event {
-        if button == 274 && state == ButtonState::Pressed {
+        if button == &274 && state == &ButtonState::Pressed {
             if let Ok(txt) = clipboard.load_primary() {
                 query.push_str(&txt);
                 *action = Some(Action::Search);
@@ -276,11 +276,11 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
             ..
         } => {
             if state == KeyState::Pressed {
-                if let Some(a) = keybindings.get(modifiers, keysym) {
+                if let Some(a) = keybindings.get(*modifiers, keysym) {
                     match a {
                         &Action::Delete => {
                             query.pop();
-                            *action = Some(Action::Search)
+                            *action = Some(Action::Search);
                         }
                         &Action::DeleteWord => {
                             query.pop();
@@ -290,7 +290,7 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                                     break;
                                 }
                             }
-                            *action = Some(Action::Search)
+                            *action = Some(Action::Search);
                         }
                         &Action::Paste => {
                             if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
@@ -300,7 +300,7 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                                 *action = Some(Action::Search);
                             }
                         }
-                        a => *action = Some(a.to_owned()),
+                        a => *action = Some(*a),
                     }
                 } else if let Some(txt) = utf8 {
                     let t_sanitized = txt
@@ -315,11 +315,11 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
         }
         KbEvent::Modifiers { modifiers: m } => *modifiers = m,
         KbEvent::Repeat { keysym, utf8, .. } => {
-            if let Some(a) = keybindings.get(modifiers, keysym) {
+            if let Some(a) = keybindings.get(*modifiers, keysym) {
                 match a {
                     &Action::Delete => {
                         query.pop();
-                        *action = Some(Action::Search)
+                        *action = Some(Action::Search);
                     }
                     &Action::DeleteWord => {
                         query.pop();
@@ -329,9 +329,9 @@ fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
                                 break;
                             }
                         }
-                        *action = Some(Action::Search)
+                        *action = Some(Action::Search);
                     }
-                    a => *action = Some(a.to_owned()),
+                    a => *action = Some(*a),
                 }
             } else if let Some(txt) = utf8 {
                 query.push_str(&txt);

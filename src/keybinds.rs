@@ -15,7 +15,7 @@ pub struct Keybindings {
 
 impl From<KeybindingsConfig> for Keybindings {
     fn from(config: KeybindingsConfig) -> Self {
-        let mut res = Keybindings {
+        let mut res = Self {
             inner: HashMap::new(),
         };
 
@@ -37,7 +37,7 @@ pub struct Modifiers(ModifiersState);
 
 impl From<ModifiersState> for Modifiers {
     fn from(modifiers: ModifiersState) -> Self {
-        Modifiers(modifiers)
+        Self(modifiers)
     }
 }
 
@@ -51,7 +51,7 @@ impl Hash for Modifiers {
 }
 
 impl PartialEq for Modifiers {
-    fn eq(&self, other: &Modifiers) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         self.0.ctrl == other.0.ctrl
             && self.0.alt == other.0.alt
             && self.0.shift == other.0.shift
@@ -67,23 +67,23 @@ pub struct KeyCombo {
 }
 
 impl Keybindings {
-    pub fn get(&self, modifiers: &ModifiersState, keysym: u32) -> Option<&Action> {
+    pub fn get(&self, modifiers: ModifiersState, keysym: u32) -> Option<&Action> {
         self.inner.get(&KeyCombo {
-            modifiers: Modifiers(*modifiers),
+            modifiers: Modifiers(modifiers),
             key: keysym,
         })
     }
 
     fn add_key_combos(&mut self, action: Action, key_combos: &[KeyCombo]) {
-        key_combos.iter().for_each(|entry| {
-            self.inner.insert(entry.to_owned(), action);
-        });
+        for entry in key_combos.iter() {
+            self.inner.insert(entry.clone(), action);
+        }
     }
 }
 
 impl KeyCombo {
-    pub fn new(modifiers: Modifiers, key: u32) -> Self {
-        KeyCombo { modifiers, key }
+    pub const fn new(modifiers: Modifiers, key: u32) -> Self {
+        Self { modifiers, key }
     }
 }
 
@@ -120,13 +120,14 @@ impl<'de> Visitor<'de> for KeyComboVisitor {
                 }
             }
         });
-        if let Some(key) = key {
-            Ok(KeyCombo {
-                modifiers: Modifiers(modifiers),
-                key,
-            })
-        } else {
-            Err(de::Error::custom("No key given or unable to parse"))
-        }
+        key.map_or_else(
+            || Err(de::Error::custom("No key given or unable to parse")),
+            |key| {
+                Ok(KeyCombo {
+                    modifiers: Modifiers(modifiers),
+                    key,
+                })
+            },
+        )
     }
 }

@@ -89,7 +89,7 @@ impl Font {
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
 
-        for c in text.chars() {
+        for c in text.replace("\t", "    ").chars() {
             let mut font_index = 0;
             for (i, font) in self.fonts.iter().enumerate() {
                 if font.lookup_glyph_index(c) != 0 {
@@ -112,7 +112,7 @@ impl Font {
             let (metrics, bitmap) = self.render_glyph(glyph.key);
             current_width += metrics.advance_width;
             for (i, alpha) in bitmap.iter().enumerate() {
-                if alpha != &0 {
+                if alpha != &0 && glyph.width > 0 {
                     let x = glyph.x + x_offset as f32 + (i % glyph.width) as f32;
                     let y = glyph.y + y_offset as f32 + (i / glyph.width) as f32;
 

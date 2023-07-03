@@ -72,10 +72,11 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
+    let args = Args::parse();
 
     match put_pid() {
         Ok(()) => {
-            if let Some(child_handle) = run().await? {
+            if let Some(child_handle) = run(args).await? {
                 /* wait for check if comand exec was successful
                    and history has been written
                 */
@@ -117,20 +118,17 @@ fn put_pid() -> std::io::Result<()> {
             debug!("Pid file already exists");
             let mut pid = String::new();
             file_handle.read_to_string(&mut pid)?;
-            match fs::metadata(format!("/proc/{pid}")) {
-                Ok(_) => {
-                    debug!("Pid from pid file still alive");
-                    Err(std::io::Error::new(
-                        ErrorKind::Other,
-                        "Kickoff is already running",
-                    ))
-                }
-                Err(_) => {
-                    debug!("Pid from pid not alive, overwriting...");
-                    let mut pid_file = fs::File::create(pid_path)?;
-                    pid_file.write_all(std::process::id().to_string().as_bytes())?;
-                    Ok(())
-                }
+            if !pid.is_empty() && matches!(fs::metadata(format!("/proc/{pid}")), Ok(_)) {
+                debug!("Pid from pid file still alive");
+                Err(std::io::Error::new(
+                    ErrorKind::Other,
+                    "Kickoff is already running",
+                ))
+            } else {
+                debug!("Pid from kickoff.pid not alive, overwriting...");
+                let mut pid_file = fs::File::create(pid_path)?;
+                pid_file.write_all(std::process::id().to_string().as_bytes())?;
+                Ok(())
             }
         }
     }
@@ -144,9 +142,7 @@ fn del_pid() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn run() -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
-    let args = Args::parse();
-
+async fn run(args: Args) -> Result<Option<JoinHandle<()>>, Box<dyn Error>> {
     let config = match Config::load(args.config) {
         Ok(c) => c,
         Err(e) => {

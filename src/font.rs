@@ -75,6 +75,25 @@ impl Font {
         }
     }
 
+    fn replace_tabs(input: &str) -> String {
+        const tab_width: usize = 8;
+        let mut res = String::new();
+        for (idx, c) in input.chars().enumerate() {
+            if c == '\t' {
+                let tab_alignment = idx % tab_width;
+                if tab_alignment == 0 {
+                    res.push_str(" ".repeat(8).as_str());
+                } else {
+                    res.push_str(" ".repeat(tab_width - tab_alignment).as_str());
+                }
+            } else {
+                res.push(c);
+            }
+        }
+
+        res
+    }
+
     pub fn render(
         &mut self,
         text: &str,
@@ -89,7 +108,7 @@ impl Font {
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
 
-        for c in text.replace("\t", "    ").chars() {
+        for c in Self::replace_tabs(text).chars() {
             let mut font_index = 0;
             for (i, font) in self.fonts.iter().enumerate() {
                 if font.lookup_glyph_index(c) != 0 {

@@ -20,6 +20,7 @@ pub struct Font {
     size: f32,
     scale: i32,
     glyph_cache: RefCell<HashMap<GlyphRasterConfig, (Metrics, Vec<u8>)>>,
+    tab_width: usize,
 }
 
 impl Font {
@@ -52,6 +53,7 @@ impl Font {
             layout: RefCell::new(Layout::new(CoordinateSystem::PositiveYDown)),
             size,
             scale: 1,
+            tab_width: 8,
             glyph_cache: RefCell::new(HashMap::new()),
         })
     }
@@ -75,6 +77,24 @@ impl Font {
         }
     }
 
+    fn replace_tabs(input: &str, tab_width: usize) -> String {
+        let mut res = String::new();
+        for (idx, c) in input.chars().enumerate() {
+            if c == '\t' {
+                let tab_alignment = idx % tab_width;
+                if tab_alignment == 0 {
+                    res.push_str(" ".repeat(8).as_str());
+                } else {
+                    res.push_str(" ".repeat(tab_width - tab_alignment).as_str());
+                }
+            } else {
+                res.push(c);
+            }
+        }
+
+        res
+    }
+
     pub fn render(
         &mut self,
         text: &str,
@@ -89,7 +109,7 @@ impl Font {
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
 
-        for c in text.chars() {
+        for c in Self::replace_tabs(text, self.tab_width).chars() {
             let mut font_index = 0;
             for (i, font) in self.fonts.iter().enumerate() {
                 if font.lookup_glyph_index(c) != 0 {
@@ -112,7 +132,7 @@ impl Font {
             let (metrics, bitmap) = self.render_glyph(glyph.key);
             current_width += metrics.advance_width;
             for (i, alpha) in bitmap.iter().enumerate() {
-                if alpha != &0 {
+                if alpha != &0 && glyph.width > 0 {
                     let x = glyph.x + x_offset as f32 + (i % glyph.width) as f32;
                     let y = glyph.y + y_offset as f32 + (i / glyph.width) as f32;
 

@@ -20,6 +20,7 @@ pub struct Font {
     size: f32,
     scale: i32,
     glyph_cache: RefCell<HashMap<GlyphRasterConfig, (Metrics, Vec<u8>)>>,
+    tab_width: usize,
 }
 
 impl Font {
@@ -52,6 +53,7 @@ impl Font {
             layout: RefCell::new(Layout::new(CoordinateSystem::PositiveYDown)),
             size,
             scale: 1,
+            tab_width: 8,
             glyph_cache: RefCell::new(HashMap::new()),
         })
     }
@@ -75,8 +77,7 @@ impl Font {
         }
     }
 
-    fn replace_tabs(input: &str) -> String {
-        const tab_width: usize = 8;
+    fn replace_tabs(input: &str, tab_width: usize) -> String {
         let mut res = String::new();
         for (idx, c) in input.chars().enumerate() {
             if c == '\t' {
@@ -108,7 +109,7 @@ impl Font {
         let mut layout = self.layout.borrow_mut();
         layout.reset(&LayoutSettings::default());
 
-        for c in Self::replace_tabs(text).chars() {
+        for c in Self::replace_tabs(text, self.tab_width).chars() {
             let mut font_index = 0;
             for (i, font) in self.fonts.iter().enumerate() {
                 if font.lookup_glyph_index(c) != 0 {

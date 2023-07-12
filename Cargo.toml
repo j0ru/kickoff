@@ -33,7 +33,7 @@ csv = "1.2"
 futures = "0.3"
 
 [dependencies.tokio]
-version = "1.28"
+version = "1.29"
 features = [
     "fs",
     "rt-multi-thread",

@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Color(pub u8, pub u8, pub u8, pub u8);
 
 impl From<css_color::Rgba> for Color {

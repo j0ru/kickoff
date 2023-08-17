@@ -1,342 +1,430 @@
+use crate::{keybinds::Keybindings, App};
+use image::{Pixel, Rgba};
+use log::*;
 use smithay_client_toolkit::{
-    get_surface_scale_factor,
-    reexports::{
-        calloop,
-        client::protocol::{
-            wl_output,
-            wl_pointer::{ButtonState, Event as PEvent},
-            wl_seat, wl_shm, wl_surface,
-        },
-        client::{Attached, DispatchData, Display, Main},
-        protocols::wlr::unstable::layer_shell::v1::client::{
-            zwlr_layer_shell_v1, zwlr_layer_surface_v1,
-            zwlr_layer_surface_v1::KeyboardInteractivity,
-        },
-    },
+    compositor::{CompositorHandler, CompositorState},
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat, delegate_shm,
+    output::{OutputHandler, OutputState},
+    registry::{ProvidesRegistryState, RegistryState},
+    registry_handlers,
     seat::{
-        keyboard::{
-            keysyms, map_keyboard_repeat, Event as KbEvent, KeyState, ModifiersState, RepeatKind,
-        },
-        with_seat_data,
+        keyboard::{KeyEvent, KeyboardHandler, Modifiers},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler},
+        Capability, SeatHandler, SeatState,
     },
-    shm::DoubleMemPool,
+    shell::{
+        wlr_layer::{
+            Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
+            LayerSurfaceConfigure,
+        },
+        WaylandSurface,
+    },
+    shm::{slot::SlotPool, Shm, ShmHandler},
+};
+use std::io::{BufWriter, Write};
+use wayland_client::{
+    globals::registry_queue_init,
+    protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
+    Connection, QueueHandle,
 };
 
-use smithay_clipboard::Clipboard;
-
-use log::*;
-use std::cell::Cell;
-use std::io::{BufWriter, ErrorKind, Seek, Write};
-use std::rc::Rc;
-
-use image::{Pixel, Rgba, RgbaImage};
-
-use crate::keybinds::Keybindings;
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub enum RenderEvent {
-    Configure { width: u32, height: u32 },
-    Closed,
-}
-
-pub struct Surface {
-    surface: wl_surface::WlSurface,
-    layer_surface: Main<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1>,
-    pub next_render_event: Rc<Cell<Option<RenderEvent>>>,
-    pools: DoubleMemPool,
-    pub dimensions: (u32, u32),
-}
-
-impl Surface {
-    pub fn set_dimensions(&mut self, width: u32, height: u32) -> bool {
-        if self.dimensions != (width, height) {
-            self.dimensions = (width, height);
-            true
-        } else {
-            false
-        }
-    }
-    pub fn new(
-        output: Option<&wl_output::WlOutput>,
-        surface: wl_surface::WlSurface,
-        layer_shell: &Attached<zwlr_layer_shell_v1::ZwlrLayerShellV1>,
-        pools: DoubleMemPool,
-    ) -> Self {
-        let layer_surface = layer_shell.get_layer_surface(
-            &surface,
-            output,
-            zwlr_layer_shell_v1::Layer::Overlay,
-            "launcher".to_owned(),
-        );
-
-        // Anchor to all corners of the output to archive fullscreen
-        layer_surface.set_anchor(zwlr_layer_surface_v1::Anchor::all());
-
-        // Enable Keyboard interactivity
-        layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-
-        let next_render_event = Rc::new(Cell::new(None::<RenderEvent>));
-        let next_render_event_handle = Rc::clone(&next_render_event);
-        layer_surface.quick_assign(move |layer_surface, event, _| {
-            match (event, next_render_event_handle.get()) {
-                (zwlr_layer_surface_v1::Event::Closed, _) => {
-                    next_render_event_handle.set(Some(RenderEvent::Closed));
-                }
-                (
-                    zwlr_layer_surface_v1::Event::Configure {
-                        serial,
-                        width,
-                        height,
-                    },
-                    next,
-                ) if next != Some(RenderEvent::Closed) => {
-                    layer_surface.ack_configure(serial);
-                    next_render_event_handle.set(Some(RenderEvent::Configure { width, height }));
-                }
-                _ => todo!(),
-            }
-        });
-
-        // Commit so that the server will send a configure event
-        surface.commit();
-
-        Self {
-            surface,
-            layer_surface,
-            next_render_event,
-            pools,
-            dimensions: (0, 0),
-        }
-    }
-
-    pub fn draw(&mut self, mut image: RgbaImage, scale: i32) -> Result<(), std::io::Error> {
-        if let Some(pool) = self.pools.pool() {
-            let width = self.dimensions.0 as i32 * scale;
-            let height = self.dimensions.1 as i32 * scale;
-            let stride = 4 * width;
-
-            // First make sure the pool is the right size
-            pool.resize((stride * height) as usize)?;
-
-            // Create a new buffer from the pool
-            let buffer = pool.buffer(0, width, height, stride, wl_shm::Format::Argb8888);
-            image.pixels_mut().for_each(|pixel| {
-                let channels = pixel.channels_mut();
-                *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
-            });
-
-            // Write the color to all bytes of the pool
-            pool.rewind()?;
-            {
-                let mut writer = BufWriter::new(&mut *pool);
-                writer.write_all(image.as_raw())?;
-                writer.flush()?;
-            }
-
-            // Attach the buffer to the surface and mark the entire surface as damaged
-            self.surface.attach(Some(&buffer), 0, 0);
-            self.surface.damage_buffer(0, 0, width, height);
-
-            // Finally, commit the surface
-            self.surface.commit();
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                ErrorKind::Other,
-                "All pools are in use by Wayland",
-            ))
-        }
-    }
-
-    pub fn get_scale(&self) -> i32 {
-        get_surface_scale_factor(&self.surface)
-    }
-
-    pub fn set_scale(&mut self, scale: i32) {
-        self.surface.set_buffer_scale(scale);
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        self.layer_surface.destroy();
-        self.surface.destroy();
-    }
-}
-
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum Action {
     Execute,
     Exit,
     Complete,
     NavUp,
     NavDown,
-    Search,
     Delete,
     DeleteWord,
     Paste,
+    Insert(String),
 }
 
-pub struct DData {
-    pub query: String,
-    pub action: Option<Action>,
-    pub modifiers: ModifiersState,
-    pub clipboard: Clipboard,
+pub fn run(app: App) {
+    let conn = Connection::connect_to_env().unwrap();
+
+    let (globals, mut event_queue) = registry_queue_init(&conn).unwrap();
+    let qh = event_queue.handle();
+
+    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor is not available");
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("layer shell is not available");
+    let shm = Shm::bind(&globals, &qh).expect("wl_shm is not available");
+
+    let surface = compositor.create_surface(&qh);
+
+    let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("kickoff"), None);
+
+    layer.set_anchor(Anchor::all());
+    layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
+
+    layer.commit();
+
+    let pool = SlotPool::new(256 * 256 * 4, &shm).expect("Failed to create pool");
+
+    let mut gui_layer = GuiLayer {
+        registry_state: RegistryState::new(&globals),
+        seat_state: SeatState::new(&globals, &qh),
+        output_state: OutputState::new(&globals, &qh),
+        shm,
+
+        exit: false,
+        first_configure: true,
+        pool,
+        width: 256,
+        height: 256,
+        layer,
+        keyboard: None,
+        pointer: None,
+        scale_factor: 1,
+        modifiers: Modifiers::default(),
+        keybindings: Keybindings::from(app.config.keybindings.clone()),
+        app,
+        next_action: None,
+    };
+
+    loop {
+        event_queue.blocking_dispatch(&mut gui_layer).unwrap();
+        match &gui_layer.next_action.take() {
+            Some(Action::Exit) => gui_layer.exit = true,
+            Some(Action::Complete) => gui_layer.app.complete(),
+            Some(Action::Delete) => gui_layer.app.delete(),
+            Some(Action::DeleteWord) => gui_layer.app.delete_word(),
+            Some(Action::NavUp) => gui_layer.app.nav_up(1),
+            Some(Action::NavDown) => gui_layer.app.nav_down(1),
+            Some(Action::Insert(s)) => gui_layer.app.insert(s.to_string()),
+            Some(Action::Execute) => {
+                gui_layer.app.execute();
+                gui_layer.exit = true;
+            }
+            _ => {}
+        }
+
+        if gui_layer.exit {
+            debug!("exiting kickoff");
+            break;
+        }
+    }
+}
+
+struct GuiLayer {
+    registry_state: RegistryState,
+    seat_state: SeatState,
+    output_state: OutputState,
+    shm: Shm,
+
+    exit: bool,
+    first_configure: bool,
+    pool: SlotPool,
+    width: u32,
+    height: u32,
+    layer: LayerSurface,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    pointer: Option<wl_pointer::WlPointer>,
+    scale_factor: i32,
+    modifiers: Modifiers,
+    app: App,
+    next_action: Option<Action>,
     keybindings: Keybindings,
 }
 
-impl DData {
-    pub fn new(display: &Display, keybindings: Keybindings) -> DData {
-        let clipboard = unsafe { Clipboard::new(display.get_display_ptr() as *mut _) };
-        DData {
-            query: "".to_string(),
-            action: None,
-            modifiers: ModifiersState::default(),
-            clipboard,
-            keybindings,
+impl CompositorHandler for GuiLayer {
+    fn scale_factor_changed(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &wl_surface::WlSurface,
+        new_factor: i32,
+    ) {
+        self.scale_factor = new_factor
+    }
+
+    fn frame(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _surface: &wl_surface::WlSurface,
+        _time: u32,
+    ) {
+        self.draw(qh);
+    }
+}
+
+impl OutputHandler for GuiLayer {
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
+
+    fn new_output(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
+    }
+
+    fn update_output(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
+    }
+
+    fn output_destroyed(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
+    }
+}
+
+impl LayerShellHandler for GuiLayer {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
+        self.exit = true;
+    }
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _layer: &LayerSurface,
+        configure: LayerSurfaceConfigure,
+        _serial: u32,
+    ) {
+        if configure.new_size.0 == 0 || configure.new_size.1 == 0 {
+            self.width = 256;
+            self.height = 256;
+        } else {
+            self.width = configure.new_size.0;
+            self.height = configure.new_size.1;
+        }
+
+        // Initiate the first draw.
+        if self.first_configure {
+            self.first_configure = false;
+            self.draw(qh);
         }
     }
 }
 
-pub fn register_inputs(
-    seats: &[Attached<wl_seat::WlSeat>],
-    event_loop: &calloop::EventLoop<DData>,
-) {
-    for seat in seats {
-        if let Some((has_ptr, _name)) = with_seat_data(seat, |seat_data| {
-            (
-                seat_data.has_pointer && !seat_data.defunct,
-                seat_data.name.clone(),
+impl SeatHandler for GuiLayer {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
+
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+
+    fn new_capability(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
+        capability: Capability,
+    ) {
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            debug!("Set keyboard capability");
+            let keyboard = self
+                .seat_state
+                .get_keyboard(qh, &seat, None)
+                .expect("Failed to create keyboard");
+            self.keyboard = Some(keyboard);
+        }
+
+        if capability == Capability::Pointer && self.pointer.is_none() {
+            debug!("Set pointer capability");
+            let pointer = self
+                .seat_state
+                .get_pointer(qh, &seat)
+                .expect("Failed to create pointer");
+            self.pointer = Some(pointer);
+        }
+    }
+
+    fn remove_capability(
+        &mut self,
+        _conn: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        capability: Capability,
+    ) {
+        if capability == Capability::Keyboard && self.keyboard.is_some() {
+            debug!("Unset keyboard capability");
+            self.keyboard.take().unwrap().release();
+        }
+
+        if capability == Capability::Pointer && self.pointer.is_some() {
+            debug!("Unset pointer capability");
+            self.pointer.take().unwrap().release();
+        }
+    }
+
+    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+}
+
+impl KeyboardHandler for GuiLayer {
+    fn enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: &wl_surface::WlSurface,
+        _: u32,
+        _: &[u32],
+        _keysyms: &[u32],
+    ) {
+    }
+
+    fn leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: &wl_surface::WlSurface,
+        _: u32,
+    ) {
+    }
+
+    fn press_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        debug!("Key press: {event:?}");
+        if let Some(action) = self.keybindings.get(&self.modifiers, event.keysym) {
+            self.next_action = Some(action.clone())
+        } else if let Some(input) = event.utf8 {
+            self.next_action = Some(Action::Insert(input));
+        }
+    }
+
+    fn release_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _: u32,
+        event: KeyEvent,
+    ) {
+        debug!("Key release: {event:?}");
+    }
+
+    fn update_modifiers(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        _serial: u32,
+        modifiers: Modifiers,
+    ) {
+        debug!("Update modifiers: {modifiers:?}");
+        self.modifiers = modifiers;
+    }
+}
+
+impl PointerHandler for GuiLayer {
+    fn pointer_frame(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _pointer: &wl_pointer::WlPointer,
+        events: &[PointerEvent],
+    ) {
+        use PointerEventKind::*;
+        for event in events {
+            // Ignore events for other surfaces
+            if &event.surface != self.layer.wl_surface() {
+                continue;
+            }
+            match event.kind {
+                Leave { .. } => {
+                    debug!("Pointer left");
+                    self.next_action = Some(Action::Exit);
+                }
+                Press { button, .. } => {
+                    debug!("Press {:x} @ {:?}", button, event.position);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+impl ShmHandler for GuiLayer {
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
+    }
+}
+
+impl GuiLayer {
+    pub fn draw(&mut self, qh: &QueueHandle<Self>) {
+        let width = self.width;
+        let height = self.height;
+        let stride = self.width as i32 * 4;
+
+        let (buffer, canvas) = self
+            .pool
+            .create_buffer(
+                width as i32,
+                height as i32,
+                stride,
+                wl_shm::Format::Argb8888,
             )
-        }) {
-            if has_ptr {
-                let pointer = seat.get_pointer();
-                pointer.quick_assign(move |_, event, ddata| process_pointer_event(event, ddata));
-            }
-        }
-    }
+            .expect("create buffer");
 
-    for seat in seats {
-        if let Some((has_kbd, name)) = with_seat_data(seat, |seat_data| {
-            (
-                seat_data.has_keyboard && !seat_data.defunct,
-                seat_data.name.clone(),
-            )
-        }) {
-            if has_kbd {
-                if let Err(err) = map_keyboard_repeat(
-                    event_loop.handle(),
-                    seat,
-                    None,
-                    RepeatKind::System,
-                    move |event, _, ddata| process_keyboard_event(event, ddata),
-                ) {
-                    error!("Failed to map keyboard on seat {name} : {err:?}.")
-                }
-            }
-        }
-    }
-}
+        // Draw to the window:
+        {
+            let mut image = self.app.draw(width, height, self.scale_factor);
+            image.pixels_mut().for_each(|pixel| {
+                let channels = pixel.channels_mut();
+                *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
+            });
 
-fn process_pointer_event(event: PEvent, mut data: DispatchData) {
-    let DData {
-        query,
-        action,
-        clipboard,
-        ..
-    } = data.get::<DData>().unwrap();
-    if let PEvent::Button { button, state, .. } = event {
-        if button == 274 && state == ButtonState::Pressed {
-            if let Ok(txt) = clipboard.load_primary() {
-                query.push_str(&txt);
-                *action = Some(Action::Search);
+            {
+                let mut writer = BufWriter::new(&mut *canvas);
+                writer.write_all(image.as_raw()).unwrap();
+                writer.flush().unwrap();
             }
         }
+
+        // Damage the entire window
+        self.layer
+            .wl_surface()
+            .damage_buffer(0, 0, width as i32, height as i32);
+
+        // Request our next frame
+        self.layer
+            .wl_surface()
+            .frame(qh, self.layer.wl_surface().clone());
+
+        // Attach and commit to present.
+        buffer
+            .attach_to(self.layer.wl_surface())
+            .expect("buffer attach");
+        self.layer.commit();
     }
 }
 
-fn process_keyboard_event(event: KbEvent, mut data: DispatchData) {
-    let DData {
-        query,
-        action,
-        modifiers,
-        clipboard,
-        keybindings,
-        ..
-    } = data.get::<DData>().unwrap();
-    match event {
-        KbEvent::Enter { .. } => {}
-        KbEvent::Leave { .. } => {
-            *action = Some(Action::Exit);
-        }
-        KbEvent::Key {
-            keysym,
-            state,
-            utf8,
-            ..
-        } => {
-            if state == KeyState::Pressed {
-                if let Some(a) = keybindings.get(modifiers, keysym) {
-                    match a {
-                        &Action::Delete => {
-                            query.pop();
-                            *action = Some(Action::Search)
-                        }
-                        &Action::DeleteWord => {
-                            query.pop();
-                            loop {
-                                let removed_char = query.pop();
-                                if removed_char.unwrap_or(' ') == ' ' {
-                                    break;
-                                }
-                            }
-                            *action = Some(Action::Search)
-                        }
-                        &Action::Paste => {
-                            if let (KeyState::Pressed, keysyms::XKB_KEY_v, Ok(txt)) =
-                                (state, keysym, clipboard.load())
-                            {
-                                query.push_str(&txt);
-                                *action = Some(Action::Search);
-                            }
-                        }
-                        a => *action = Some(a.to_owned()),
-                    }
-                } else if let Some(txt) = utf8 {
-                    let t_sanitized = txt
-                        .chars()
-                        .filter(|c| c.is_ascii() && !c.is_ascii_control())
-                        .collect::<String>();
+delegate_compositor!(GuiLayer);
+delegate_output!(GuiLayer);
+delegate_shm!(GuiLayer);
 
-                    query.push_str(&t_sanitized);
-                    *action = Some(Action::Search);
-                }
-            }
-        }
-        KbEvent::Modifiers { modifiers: m } => *modifiers = m,
-        KbEvent::Repeat { keysym, utf8, .. } => {
-            if let Some(a) = keybindings.get(modifiers, keysym) {
-                match a {
-                    &Action::Delete => {
-                        query.pop();
-                        *action = Some(Action::Search)
-                    }
-                    &Action::DeleteWord => {
-                        query.pop();
-                        loop {
-                            let removed_char = query.pop();
-                            if removed_char.unwrap_or(' ') == ' ' {
-                                break;
-                            }
-                        }
-                        *action = Some(Action::Search)
-                    }
-                    a => *action = Some(a.to_owned()),
-                }
-            } else if let Some(txt) = utf8 {
-                query.push_str(&txt);
-                *action = Some(Action::Search);
-            }
-        }
+delegate_seat!(GuiLayer);
+delegate_keyboard!(GuiLayer);
+delegate_pointer!(GuiLayer);
+
+delegate_layer!(GuiLayer);
+
+delegate_registry!(GuiLayer);
+
+impl ProvidesRegistryState for GuiLayer {
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry_state
     }
+    registry_handlers![OutputState, SeatState];
 }

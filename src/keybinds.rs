@@ -1,7 +1,7 @@
 use crate::gui::Action;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
-use smithay_client_toolkit::seat::keyboard::ModifiersState;
+use smithay_client_toolkit::seat::keyboard::Modifiers as ModifiersState;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -76,7 +76,7 @@ impl Keybindings {
 
     fn add_key_combos(&mut self, action: Action, key_combos: &[KeyCombo]) {
         key_combos.iter().for_each(|entry| {
-            self.inner.insert(entry.to_owned(), action);
+            self.inner.insert(entry.to_owned(), action.clone());
         });
     }
 }

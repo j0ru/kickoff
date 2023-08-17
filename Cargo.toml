@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
-smithay-client-toolkit = "0.15"
+smithay-client-toolkit = "0.17"
 fontdue = "0.7"
 image = { version = "0.24", default-features = false }
 fuzzy-matcher = "0.3"
@@ -31,26 +31,21 @@ notify-rust = "4.8"
 clap = { version = "4.3", features = ["derive"] }
 csv = "1.2"
 futures = "0.3"
+wayland-client = "0.30.2"
+anyhow = "1.0.75"
 
 [dependencies.tokio]
-version = "1.29"
+version = "1.32"
 features = [
-    "fs",
-    "rt-multi-thread",
-    "io-util",
-    "time",
-    "rt",
-    "macros",
-    "io-std",
+  "fs",
+  "rt-multi-thread",
+  "io-util",
+  "time",
+  "rt",
+  "macros",
+  "io-std",
 ]
 default-features = false
 
 [profile.release]
 lto = true
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["async_tokio"] }
-
-[[bench]]
-name = "selection"
-harness = false

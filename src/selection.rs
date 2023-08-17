@@ -1,4 +1,4 @@
-use crate::history::History;
+use crate::config::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::*;
 use std::fs::File;
@@ -108,7 +108,7 @@ impl ElementListBuilder {
         self.from_stdin = true;
     }
 
-    pub async fn build(&self) -> Result<ElementList, Box<dyn std::error::Error>> {
+    pub async fn build(&self) -> Result<ElementList, std::io::Error> {
         let mut fut = Vec::new();
         if self.from_stdin {
             fut.push(spawn(ElementListBuilder::build_stdin()))

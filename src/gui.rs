@@ -152,7 +152,8 @@ impl CompositorHandler for GuiLayer {
         _surface: &wl_surface::WlSurface,
         new_factor: i32,
     ) {
-        self.scale_factor = new_factor
+        self.scale_factor = new_factor;
+        self.layer.set_buffer_scale(new_factor as u32).unwrap();
     }
 
     fn frame(
@@ -384,9 +385,9 @@ impl ShmHandler for GuiLayer {
 
 impl GuiLayer {
     pub fn draw(&mut self, qh: &QueueHandle<Self>) {
-        let width = self.width;
-        let height = self.height;
-        let stride = self.width as i32 * 4;
+        let width = self.width * self.scale_factor as u32;
+        let height = self.height * self.scale_factor as u32;
+        let stride = width as i32 * 4;
 
         let (buffer, canvas) = self
             .pool
@@ -399,19 +400,15 @@ impl GuiLayer {
             .expect("create buffer");
 
         // Draw to the window:
-        {
-            let mut image = self.app.draw(width, height, self.scale_factor);
-            image.pixels_mut().for_each(|pixel| {
-                let channels = pixel.channels_mut();
-                *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
-            });
+        let mut image = self.app.draw(width, height, self.scale_factor);
+        image.pixels_mut().for_each(|pixel| {
+            let channels = pixel.channels_mut();
+            *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
+        });
 
-            {
-                let mut writer = BufWriter::new(&mut *canvas);
-                writer.write_all(image.as_raw()).unwrap();
-                writer.flush().unwrap();
-            }
-        }
+        let mut writer = BufWriter::new(&mut *canvas);
+        writer.write_all(image.as_raw()).unwrap();
+        writer.flush().unwrap();
 
         // Damage the entire window
         self.layer

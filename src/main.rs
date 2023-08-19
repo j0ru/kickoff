@@ -1,5 +1,3 @@
-use std::{path::PathBuf, process};
-
 use anyhow::Result;
 use app::App;
 use clap::Parser;
@@ -8,6 +6,7 @@ use log::*;
 use std::{
     io::{Read, Write},
     {fs, io::ErrorKind},
+    {path::PathBuf, process},
 };
 use xdg::BaseDirectories;
 

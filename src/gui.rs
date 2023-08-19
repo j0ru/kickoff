@@ -58,7 +58,7 @@ pub fn run(app: App) {
     let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("kickoff"), None);
 
     layer.set_anchor(Anchor::all());
-    layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
+    layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
 
     layer.commit();
 

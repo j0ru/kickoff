@@ -5,6 +5,11 @@ use app::App;
 use clap::Parser;
 use config::{Config, History};
 use log::*;
+use std::{
+    io::{Read, Write},
+    {fs, io::ErrorKind},
+};
+use xdg::BaseDirectories;
 
 mod app;
 mod color;
@@ -43,9 +48,69 @@ pub struct Args {
     history: Option<PathBuf>,
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    match put_pid() {
+        Ok(()) => {
+            run().await?;
+            del_pid()?;
+            Ok(())
+        }
+        Err(e) => {
+            error!("{e}");
+            Ok(())
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    run().await
+}
+
+#[cfg(target_os = "linux")]
+fn put_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    match fs::File::open(pid_path.clone()) {
+        Err(_) => {
+            let mut pid_file = fs::File::create(pid_path)?;
+            pid_file.write_all(std::process::id().to_string().as_bytes())?;
+            Ok(())
+        }
+        Ok(mut file_handle) => {
+            debug!("Pid file already exists");
+            let mut pid = String::new();
+            file_handle.read_to_string(&mut pid)?;
+            if !pid.is_empty() && matches!(fs::metadata(format!("/proc/{pid}")), Ok(_)) {
+                debug!("Pid from pid file still alive");
+                Err(std::io::Error::new(
+                    ErrorKind::Other,
+                    "Kickoff is already running",
+                ))
+            } else {
+                debug!("Pid from kickoff.pid not alive, overwriting...");
+                let mut pid_file = fs::File::create(pid_path)?;
+                pid_file.write_all(std::process::id().to_string().as_bytes())?;
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn del_pid() -> std::io::Result<()> {
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
+    std::fs::remove_file(pid_path)?;
+    Ok(())
+}
+
+async fn run() -> Result<()> {
     let args = Args::parse();
     let config = match Config::load(args.config.clone()) {
         Ok(c) => c,
@@ -84,8 +149,8 @@ async fn main() -> Result<()> {
         apps.add_stdin();
     }
     let apps = apps.build();
-
     let mut apps = apps.await?;
+
     let history = match history {
         Some(history) => {
             let history = history.await??;

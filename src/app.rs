@@ -94,7 +94,7 @@ impl App {
             (*self
                 .all_entries
                 .as_ref_vec()
-                .get(self.select_index)
+                .get(*self.last_search_result.get(self.select_index).unwrap())
                 .unwrap())
             .clone()
         };

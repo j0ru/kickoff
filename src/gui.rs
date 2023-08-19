@@ -165,15 +165,6 @@ impl CompositorHandler for GuiLayer {
     ) {
         self.draw(qh);
     }
-
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
 }
 
 impl OutputHandler for GuiLayer {

@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
 
 [dependencies]
-smithay-client-toolkit = { git = "https://github.com/Smithay/client-toolkit.git", commit = "2854623" }
+smithay-client-toolkit = "0.17"
 fontdue = "0.7"
 image = { version = "0.24", default-features = false }
 fuzzy-matcher = "0.3"

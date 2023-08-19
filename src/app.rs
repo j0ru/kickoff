@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::time::Duration;
 use std::{cmp, process};
 
@@ -92,12 +91,12 @@ impl App {
                 base_score: 0,
             }
         } else {
-            self.all_entries
+            (*self
+                .all_entries
                 .as_ref_vec()
                 .get(self.select_index)
-                .unwrap()
-                .deref()
-                .clone()
+                .unwrap())
+            .clone()
         };
         if self.args.stdout {
             print!("{}", element.value);
@@ -180,7 +179,6 @@ impl App {
         }
 
         let spacer = (1.5 * font_size) as u32;
-        debug!("{height}");
         let max_entries = ((height.saturating_sub(2 * padding).saturating_sub(spacer)) as f32
             / (font_size * 1.2)) as usize;
         let offset = if self.select_index > (max_entries / 2) {
@@ -217,7 +215,9 @@ impl App {
 fn execute(elem: Element, history: Option<History>) {
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
-            //std::thread::sleep(Duration::new(1, 0));
+            // We can't make that to long, since for some reason, even if this would be after a fork and the main programm exits,
+            // wayland keeps the window alive
+            std::thread::sleep(Duration::new(0, 50));
             match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                 Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
                     if let Some(mut history) = history {

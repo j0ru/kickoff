@@ -22,12 +22,13 @@ use smithay_client_toolkit::{
     },
     shm::{slot::SlotPool, Shm, ShmHandler},
 };
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Read, Write};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
     Connection, QueueHandle,
 };
+use wl_clipboard_rs::paste::{get_contents, ClipboardType, Error, MimeType, Seat};
 
 #[derive(Clone)]
 pub enum Action {
@@ -97,6 +98,20 @@ pub fn run(app: App) {
             Some(Action::Execute) => {
                 gui_layer.app.execute();
                 gui_layer.exit = true;
+            }
+            Some(Action::Paste) => {
+                let result =
+                    get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text);
+                match result {
+                    Ok((mut pipe, _)) => {
+                        let mut contents = vec![];
+                        pipe.read_to_end(&mut contents).unwrap();
+                        let input = String::from_utf8(contents).unwrap();
+                        gui_layer.app.insert(input);
+                    }
+                    Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {}
+                    Err(e) => error!("{e}"),
+                }
             }
             _ => {}
         }
@@ -285,6 +300,7 @@ impl KeyboardHandler for GuiLayer {
         _: &wl_surface::WlSurface,
         _: u32,
     ) {
+        self.next_action = Some(Action::Exit);
     }
 
     fn press_key(
@@ -341,15 +357,20 @@ impl PointerHandler for GuiLayer {
             if &event.surface != self.layer.wl_surface() {
                 continue;
             }
-            match event.kind {
-                Leave { .. } => {
-                    debug!("Pointer left");
-                    self.next_action = Some(Action::Exit);
+
+            if let Press { button: 274, .. } = event.kind {
+                let result =
+                    get_contents(ClipboardType::Primary, Seat::Unspecified, MimeType::Text);
+                match result {
+                    Ok((mut pipe, _)) => {
+                        let mut contents = vec![];
+                        pipe.read_to_end(&mut contents).unwrap();
+                        let input = String::from_utf8(contents).unwrap();
+                        self.next_action = Some(Action::Insert(input));
+                    }
+                    Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {}
+                    Err(e) => error!("{e}"),
                 }
-                Press { button, .. } => {
-                    debug!("Press {:x} @ {:?}", button, event.position);
-                }
-                _ => {}
             }
         }
     }

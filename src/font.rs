@@ -24,7 +24,7 @@ pub struct Font {
 }
 
 impl Font {
-    pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Font> {
+    pub async fn new(font_names: Vec<String>, size: f32) -> io::Result<Self> {
         let fc = Fontconfig::new().expect("Couldn't load fontconfig");
         let font_names = if font_names.is_empty() {
             vec![String::new()]
@@ -48,7 +48,7 @@ impl Font {
             );
         }
 
-        Ok(Font {
+        Ok(Self {
             fonts: font_data,
             layout: RefCell::new(Layout::new(CoordinateSystem::PositiveYDown)),
             size,
@@ -64,6 +64,8 @@ impl Font {
 
     fn render_glyph(&self, conf: GlyphRasterConfig) -> (Metrics, Vec<u8>) {
         let mut glyph_cache = self.glyph_cache.borrow_mut();
+
+        #[allow(clippy::option_if_let_else)]
         if let Some(bitmap) = glyph_cache.get(&conf) {
             bitmap.clone()
         } else {
@@ -138,7 +140,7 @@ impl Font {
 
                     match image.get_pixel_mut_checked(x as u32, y as u32) {
                         Some(pixel) => {
-                            pixel.blend(&image::Rgba([color.0, color.1, color.2, *alpha]))
+                            pixel.blend(&image::Rgba([color.0, color.1, color.2, *alpha]));
                         }
                         None => continue,
                     }

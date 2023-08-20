@@ -50,7 +50,23 @@ impl App {
     }
 
     pub fn complete(&mut self) {
-        todo!();
+        if !self.select_input {
+            let app = (*self
+                .all_entries
+                .as_ref_vec()
+                .get(*self.last_search_result.get(self.select_index).unwrap())
+                .unwrap())
+            .clone();
+            if self.query == app.name {
+                self.select_index = if self.select_index < self.last_search_result.len() - 1 {
+                    self.select_index + 1
+                } else {
+                    self.select_index
+                };
+            }
+            self.query.clear();
+            self.query.push_str(&app.name);
+        }
     }
     pub fn nav_up(&mut self, distance: usize) {
         if self.select_index > 0 {
@@ -217,7 +233,7 @@ fn execute(elem: Element, history: Option<History>) {
         Ok(ForkResult::Parent { child }) => {
             // We can't make that to long, since for some reason, even if this would be after a fork and the main programm exits,
             // wayland keeps the window alive
-            std::thread::sleep(Duration::new(0, 50));
+            std::thread::sleep(Duration::new(0, 100_000_000));
             match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
                 Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
                     if let Some(mut history) = history {

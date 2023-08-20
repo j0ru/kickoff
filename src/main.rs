@@ -1,3 +1,5 @@
+#![warn(clippy::nursery)]
+
 use anyhow::Result;
 use app::App;
 use clap::Parser;
@@ -161,8 +163,6 @@ async fn run() -> Result<()> {
     apps.sort_score();
 
     gui::run(App::new(args, config, apps, font.await?, history));
-
-    info!("quitting kickoff");
 
     Ok(())
 }

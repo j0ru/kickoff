@@ -9,7 +9,7 @@ pub struct Color(pub u8, pub u8, pub u8, pub u8);
 
 impl From<css_color::Rgba> for Color {
     fn from(c: css_color::Rgba) -> Self {
-        Color(
+        Self(
             (c.red * 255. * c.alpha) as u8,
             (c.green * 255. * c.alpha) as u8,
             (c.blue * 255. * c.alpha) as u8,
@@ -19,13 +19,13 @@ impl From<css_color::Rgba> for Color {
 }
 
 impl Color {
-    pub fn to_rgba(&self) -> Rgba<u8> {
+    pub const fn to_rgba(&self) -> Rgba<u8> {
         Rgba([self.0, self.1, self.2, self.3])
     }
 }
 
 impl<'de> Deserialize<'de> for Color {
-    fn deserialize<D>(deserializer: D) -> Result<Color, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -46,10 +46,6 @@ impl<'de> Visitor<'de> for ColorVisitor {
         E: de::Error,
     {
         let c = css_color::Rgba::from_str(value);
-        if let Ok(c) = c {
-            Ok(Color::from(c))
-        } else {
-            Err(de::Error::custom(""))
-        }
+        c.map_or_else(|_| Err(de::Error::custom("")), |c| Ok(Color::from(c)))
     }
 }

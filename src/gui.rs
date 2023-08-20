@@ -94,7 +94,7 @@ pub fn run(app: App) {
             Some(Action::DeleteWord) => gui_layer.app.delete_word(),
             Some(Action::NavUp) => gui_layer.app.nav_up(1),
             Some(Action::NavDown) => gui_layer.app.nav_down(1),
-            Some(Action::Insert(s)) => gui_layer.app.insert(s.to_string()),
+            Some(Action::Insert(s)) => gui_layer.app.insert(s),
             Some(Action::Execute) => {
                 gui_layer.app.execute();
                 gui_layer.exit = true;
@@ -107,9 +107,9 @@ pub fn run(app: App) {
                         let mut contents = vec![];
                         pipe.read_to_end(&mut contents).unwrap();
                         let input = String::from_utf8(contents).unwrap();
-                        gui_layer.app.insert(input);
+                        gui_layer.app.insert(&input);
                     }
-                    Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {}
+                    Err(Error::NoSeats | Error::ClipboardEmpty | Error::NoMimeType) => {}
                     Err(e) => error!("{e}"),
                 }
             }
@@ -313,8 +313,8 @@ impl KeyboardHandler for GuiLayer {
         event: KeyEvent,
     ) {
         debug!("Key press: {event:?}");
-        if let Some(action) = self.keybindings.get(&self.modifiers, event.keysym) {
-            self.next_action = Some(action.clone())
+        if let Some(action) = self.keybindings.get(self.modifiers, event.keysym) {
+            self.next_action = Some(action.clone());
         } else if let Some(input) = event.utf8 {
             self.next_action = Some(Action::Insert(input));
         }
@@ -352,7 +352,7 @@ impl PointerHandler for GuiLayer {
         _pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
-        use PointerEventKind::*;
+        use PointerEventKind::Press;
         for event in events {
             // Ignore events for other surfaces
             if &event.surface != self.layer.wl_surface() {
@@ -369,7 +369,7 @@ impl PointerHandler for GuiLayer {
                         let input = String::from_utf8(contents).unwrap();
                         self.next_action = Some(Action::Insert(input));
                     }
-                    Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {}
+                    Err(Error::NoSeats | Error::ClipboardEmpty | Error::NoMimeType) => {}
                     Err(e) => error!("{e}"),
                 }
             }

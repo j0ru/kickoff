@@ -55,7 +55,7 @@ pub struct Config {
 
 impl Default for KeybindingsConfig {
     fn default() -> Self {
-        KeybindingsConfig {
+        Self {
             delete: vec![
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_BackSpace),
                 KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Delete),
@@ -114,7 +114,7 @@ impl Default for KeybindingsConfig {
 }
 impl Default for ColorConfig {
     fn default() -> Self {
-        ColorConfig {
+        Self {
             background: Color(40, 44, 52, 170),
             prompt: Color(171, 178, 191, 255),
             text: Color(255, 255, 255, 255),
@@ -125,8 +125,8 @@ impl Default for ColorConfig {
 }
 impl Default for Config {
     fn default() -> Self {
-        Config {
-            prompt: "".to_owned(),
+        Self {
+            prompt: String::new(),
             padding: 100,
             font: None,
             fonts: vec![],
@@ -139,7 +139,7 @@ impl Default for Config {
 }
 impl Default for HistoryConfig {
     fn default() -> Self {
-        HistoryConfig {
+        Self {
             decrease_interval: 48,
         }
     }
@@ -180,7 +180,7 @@ impl Default for History {
     fn default() -> Self {
         let xdg_dirs = BaseDirectories::with_prefix("kickoff")
             .expect("Failed to determine xdg base directory");
-        History {
+        Self {
             entries: Vec::new(),
             path: xdg_dirs
                 .place_cache_file("default.csv")
@@ -190,7 +190,7 @@ impl Default for History {
 }
 
 impl History {
-    pub fn as_vec(&self) -> &Vec<HistoryEntry> {
+    pub const fn as_vec(&self) -> &Vec<HistoryEntry> {
         &self.entries
     }
 
@@ -202,14 +202,14 @@ impl History {
             if let Some(path) = xdg_dirs.find_cache_file("default.csv") {
                 path
             } else {
-                return Ok(History {
+                return Ok(Self {
                     entries: Vec::new(),
                     path: xdg_dirs.place_cache_file("default.csv")?,
                 });
             }
         };
 
-        let mut res = History {
+        let mut res = Self {
             entries: Vec::new(),
             path: history_path.clone(),
         };
@@ -249,13 +249,13 @@ impl History {
     pub fn inc(&mut self, element: &Element) {
         if let Some(entry) = self.entries.iter_mut().find(|x| x.name == element.name) {
             entry.num_used += 1;
-            entry.value = element.value.to_owned();
+            entry.value = element.value.clone();
         } else {
             self.entries.push(HistoryEntry {
-                name: element.name.to_owned(),
-                value: element.value.to_owned(),
+                name: element.name.clone(),
+                value: element.value.clone(),
                 num_used: 1,
-            })
+            });
         }
     }
 

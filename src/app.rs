@@ -33,7 +33,7 @@ impl App {
         font: Font,
         history: Option<History>,
     ) -> Self {
-        let mut app = App {
+        let mut app = Self {
             args,
             config,
             font,
@@ -68,6 +68,7 @@ impl App {
             self.query.push_str(&app.name);
         }
     }
+
     pub fn nav_up(&mut self, distance: usize) {
         if self.select_index > 0 {
             self.select_index = self.select_index.saturating_sub(distance);
@@ -75,6 +76,7 @@ impl App {
             self.select_input = true;
         }
     }
+
     pub fn nav_down(&mut self, distance: usize) {
         if self.select_input && !self.last_search_result.is_empty() {
             self.select_input = false;
@@ -85,10 +87,12 @@ impl App {
             self.select_index += distance;
         }
     }
+
     pub fn delete(&mut self) {
         self.query.pop();
         self.search();
     }
+
     pub fn delete_word(&mut self) {
         self.query.pop();
         loop {
@@ -99,6 +103,7 @@ impl App {
         }
         self.search();
     }
+
     pub fn execute(&mut self) {
         let element = if self.select_input {
             Element {
@@ -121,15 +126,15 @@ impl App {
                 history.save().unwrap();
             }
         } else {
-            execute(element, self.history.take());
+            execute(&element, self.history.take());
         }
     }
-    pub fn insert(&mut self, input: String) {
-        self.query.push_str(input.as_str());
-        debug!("Query now contains {}", self.query);
 
+    pub fn insert(&mut self, input: &str) {
+        self.query.push_str(input);
         self.search();
     }
+
     pub fn search(&mut self) {
         self.last_search_result = Vec::new();
         let search_results = self.all_entries.search(&self.query);
@@ -137,7 +142,7 @@ impl App {
         self.select_input = false;
         self.select_index = 0;
         if search_results.is_empty() {
-            self.select_input = true
+            self.select_input = true;
         }
 
         // Build list of indices to search results
@@ -228,16 +233,16 @@ impl App {
     }
 }
 
-fn execute(elem: Element, history: Option<History>) {
+fn execute(elem: &Element, history: Option<History>) {
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
             // We can't make that to long, since for some reason, even if this would be after a fork and the main programm exits,
             // wayland keeps the window alive
             std::thread::sleep(Duration::new(0, 100_000_000));
             match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
-                Ok(WaitStatus::StillAlive) | Ok(WaitStatus::Exited(_, 0)) => {
+                Ok(WaitStatus::StillAlive | WaitStatus::Exited(_, 0)) => {
                     if let Some(mut history) = history {
-                        history.inc(&elem);
+                        history.inc(elem);
                         match history.save() {
                             Ok(()) => {}
                             Err(e) => {

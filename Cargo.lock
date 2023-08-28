@@ -939,7 +939,7 @@ dependencies = [
  "hex",
  "image",
  "log",
- "nix 0.26.2",
+ "nix 0.27.0",
  "notify-rust",
  "serde",
  "smithay-client-toolkit",
@@ -1106,6 +1106,17 @@ dependencies = [
  "libc",
  "memoffset 0.7.1",
  "static_assertions",
+]
+
+[[package]]
+name = "nix"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "896d4664b919f48478f3ce02c502adfe9bffeb61563d2a12ddf1aad8f6cd926f"
+dependencies = [
+ "bitflags 2.4.0",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]

@@ -5,6 +5,7 @@ use app::App;
 use clap::Parser;
 use config::{Config, History};
 use log::*;
+use std::time::Instant;
 use std::{
     io::{Read, Write},
     {fs, io::ErrorKind},
@@ -112,6 +113,7 @@ fn del_pid() -> std::io::Result<()> {
 }
 
 async fn run() -> Result<()> {
+    let start = Instant::now();
     let args = Args::parse();
     let config = match Config::load(args.config.clone()) {
         Ok(c) => c,
@@ -162,6 +164,8 @@ async fn run() -> Result<()> {
     };
     apps.sort_score();
 
+    let elapsed = start.elapsed();
+    debug!("Time till gui: {elapsed:?}");
     gui::run(App::new(args, config, apps, font.await?, history));
 
     Ok(())

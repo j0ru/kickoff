@@ -399,13 +399,13 @@ impl GuiLayer {
             )
             .expect("create buffer");
 
-        // Draw to the window:
         let mut image = self.app.draw(width, height, self.scale_factor);
         image.pixels_mut().for_each(|pixel| {
             let channels = pixel.channels_mut();
-            *pixel = *Rgba::from_slice(&[channels[2], channels[1], channels[0], channels[3]]);
+            channels.swap(0, 2);
         });
 
+        // Draw to the window:
         let mut writer = BufWriter::new(&mut *canvas);
         writer.write_all(image.as_raw()).unwrap();
         writer.flush().unwrap();

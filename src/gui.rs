@@ -1,5 +1,5 @@
 use crate::{keybinds::Keybindings, App};
-use image::{Pixel, Rgba};
+use image::Pixel;
 use log::*;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},

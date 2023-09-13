@@ -19,7 +19,7 @@ nix = { version = "0.26", default_features = false, features = ["process"] }
 css-color = "0.2"
 exec = "0.3"
 xdg = "2.5"
-toml = "0.7"
+toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 hex = "0.4"
 log = "0.4"

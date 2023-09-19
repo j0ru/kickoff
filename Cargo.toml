@@ -30,7 +30,7 @@ notify-rust = "4.8"
 clap = { version = "4.3", features = ["derive"] }
 csv = "1.2"
 futures = "0.3"
-wayland-client = "0.30.2"
+wayland-client = "0.31.1"
 anyhow = "1.0.75"
 wl-clipboard-rs = "0.7.0"
 

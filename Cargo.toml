@@ -32,7 +32,7 @@ csv = "1.2"
 futures = "0.3"
 wayland-client = "0.30.2"
 anyhow = "1.0.75"
-wl-clipboard-rs = "0.7.0"
+wl-clipboard-rs = "0.8.0"
 
 [dependencies.tokio]
 version = "1.32"

@@ -31,10 +31,7 @@ impl Ord for Element {
 
 impl PartialOrd for Element {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match other.base_score.cmp(&self.base_score) {
-            Ordering::Equal => Some(self.name.cmp(&other.name)),
-            e => Some(e),
-        }
+        Some(self.cmp(other))
     }
 }
 

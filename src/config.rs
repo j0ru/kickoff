@@ -2,7 +2,7 @@ use crate::color::Color;
 use crate::keybinds::{KeyCombo, Modifiers};
 use crate::selection::Element;
 use log::*;
-use smithay_client_toolkit::seat::keyboard::{keysyms, Modifiers as ModifiersState};
+use smithay_client_toolkit::seat::keyboard::{Keysym, Modifiers as ModifiersState};
 use std::fmt::Debug;
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
@@ -57,9 +57,9 @@ impl Default for KeybindingsConfig {
     fn default() -> Self {
         Self {
             delete: vec![
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_BackSpace),
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Delete),
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Delete),
+                KeyCombo::new(Modifiers::default(), Keysym::BackSpace),
+                KeyCombo::new(Modifiers::default(), Keysym::Delete),
+                KeyCombo::new(Modifiers::default(), Keysym::KP_Delete),
             ],
             delete_word: vec![
                 KeyCombo::new(
@@ -68,7 +68,7 @@ impl Default for KeybindingsConfig {
                         ..ModifiersState::default()
                     }
                     .into(),
-                    keysyms::XKB_KEY_BackSpace,
+                    Keysym::BackSpace,
                 ),
                 KeyCombo::new(
                     ModifiersState {
@@ -76,7 +76,7 @@ impl Default for KeybindingsConfig {
                         ..ModifiersState::default()
                     }
                     .into(),
-                    keysyms::XKB_KEY_Delete,
+                    Keysym::Delete,
                 ),
                 KeyCombo::new(
                     ModifiersState {
@@ -84,12 +84,12 @@ impl Default for KeybindingsConfig {
                         ..ModifiersState::default()
                     }
                     .into(),
-                    keysyms::XKB_KEY_KP_Delete,
+                    Keysym::KP_Delete,
                 ),
             ],
             execute: vec![
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Return),
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Enter),
+                KeyCombo::new(Modifiers::default(), Keysym::Return),
+                KeyCombo::new(Modifiers::default(), Keysym::KP_Enter),
             ],
             paste: vec![KeyCombo::new(
                 ModifiersState {
@@ -97,18 +97,18 @@ impl Default for KeybindingsConfig {
                     ..ModifiersState::default()
                 }
                 .into(),
-                keysyms::XKB_KEY_v,
+                Keysym::v,
             )],
-            complete: vec![KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Tab)],
+            complete: vec![KeyCombo::new(Modifiers::default(), Keysym::Tab)],
             nav_up: vec![
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Up),
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Up),
+                KeyCombo::new(Modifiers::default(), Keysym::Up),
+                KeyCombo::new(Modifiers::default(), Keysym::KP_Up),
             ],
             nav_down: vec![
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Down),
-                KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_KP_Down),
+                KeyCombo::new(Modifiers::default(), Keysym::Down),
+                KeyCombo::new(Modifiers::default(), Keysym::KP_Down),
             ],
-            exit: vec![KeyCombo::new(Modifiers::default(), keysyms::XKB_KEY_Escape)],
+            exit: vec![KeyCombo::new(Modifiers::default(), Keysym::Escape)],
         }
     }
 }

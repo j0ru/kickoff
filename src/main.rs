@@ -88,7 +88,7 @@ fn put_pid() -> std::io::Result<()> {
             debug!("Pid file already exists");
             let mut pid = String::new();
             file_handle.read_to_string(&mut pid)?;
-            if !pid.is_empty() && matches!(fs::metadata(format!("/proc/{pid}")), Ok(_)) {
+            if !pid.is_empty() && fs::metadata(format!("/proc/{pid}")).is_ok() {
                 debug!("Pid from pid file still alive");
                 Err(std::io::Error::new(
                     ErrorKind::Other,

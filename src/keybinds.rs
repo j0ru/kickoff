@@ -1,7 +1,7 @@
 use crate::gui::Action;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
-use smithay_client_toolkit::seat::keyboard::Modifiers as ModifiersState;
+use smithay_client_toolkit::seat::keyboard::{Keysym, Modifiers as ModifiersState};
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -63,11 +63,11 @@ impl Eq for Modifiers {}
 #[derive(Eq, PartialEq, Hash, Clone, fmt::Debug)]
 pub struct KeyCombo {
     modifiers: Modifiers,
-    key: u32,
+    key: Keysym,
 }
 
 impl Keybindings {
-    pub fn get(&self, modifiers: ModifiersState, keysym: u32) -> Option<&Action> {
+    pub fn get(&self, modifiers: ModifiersState, keysym: Keysym) -> Option<&Action> {
         self.inner.get(&KeyCombo {
             modifiers: Modifiers(modifiers),
             key: keysym,
@@ -82,7 +82,7 @@ impl Keybindings {
 }
 
 impl KeyCombo {
-    pub const fn new(modifiers: Modifiers, key: u32) -> Self {
+    pub const fn new(modifiers: Modifiers, key: Keysym) -> Self {
         Self { modifiers, key }
     }
 }
@@ -108,7 +108,7 @@ impl<'de> Visitor<'de> for KeyComboVisitor {
         E: de::Error,
     {
         let mut modifiers = ModifiersState::default();
-        let mut key: Option<u32> = None;
+        let mut key: Option<Keysym> = None;
         value.split('+').for_each(|s| match s {
             "ctrl" => modifiers.ctrl = true,
             "shift" => modifiers.shift = true,
@@ -116,7 +116,7 @@ impl<'de> Visitor<'de> for KeyComboVisitor {
             "logo" => modifiers.logo = true,
             s => {
                 if let Some(value) = lookup_by_name(s) {
-                    key = Some(value.keysym);
+                    key = Some(Keysym::from(value.keysym));
                 }
             }
         });

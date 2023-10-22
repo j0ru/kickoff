@@ -165,6 +165,15 @@ impl CompositorHandler for GuiLayer {
     ) {
         self.draw(qh);
     }
+
+    fn transform_changed(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &wl_surface::WlSurface,
+        _new_transform: wl_output::Transform,
+    ) {
+    }
 }
 
 impl OutputHandler for GuiLayer {
@@ -289,7 +298,7 @@ impl KeyboardHandler for GuiLayer {
         _: &wl_surface::WlSurface,
         _: u32,
         _: &[u32],
-        _keysyms: &[u32],
+        _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
     ) {
     }
 

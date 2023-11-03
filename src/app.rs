@@ -168,7 +168,10 @@ impl App {
 
         let mut img =
             ImageBuffer::from_pixel(width, height, self.config.colors.background.to_rgba());
-        let prompt = &self.config.prompt;
+        let prompt = match &self.args.prompt {
+            Some(prompt) => prompt,
+            None => &self.config.prompt,
+        };
         let prompt_width = if !prompt.is_empty() {
             let (width, _) = self.font.render(
                 prompt,

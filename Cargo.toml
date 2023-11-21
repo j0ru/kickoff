@@ -25,7 +25,7 @@ hex = "0.4"
 log = "0.4"
 env_logger = "0.10"
 x11-keysymdef = "0.2.0"
-fontconfig = "0.6"
+fontconfig = "0.7"
 notify-rust = "4.8"
 clap = { version = "4.3", features = ["derive"] }
 csv = "1.2"

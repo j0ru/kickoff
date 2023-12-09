@@ -181,7 +181,7 @@ impl App {
                 padding,
                 None,
             );
-            width
+            width + (font_size * 0.2) as u32
         } else {
             0
         };

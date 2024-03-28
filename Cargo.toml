@@ -35,7 +35,7 @@ anyhow = "1.0.75"
 wl-clipboard-rs = "0.8"
 
 [dependencies.tokio]
-version = "1.35"
+version = "1.37"
 features = [
   "fs",
   "rt-multi-thread",

@@ -509,9 +509,9 @@ dependencies = [
 
 [[package]]
 name = "css-color"
-version = "0.2.5"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d101c65424c856131a3cb818da2ddde03500dc3656972269cdf79f018ef77eb4"
+checksum = "42aaeae719fd78ce501d77c6cdf01f7e96f26bcd5617a4903a1c2b97e388543a"
 
 [[package]]
 name = "cstr"

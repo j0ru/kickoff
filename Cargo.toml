@@ -13,7 +13,7 @@ keywords = ["wayland", "launcher", "wlroots"]
 [dependencies]
 smithay-client-toolkit = "0.18"
 fontdue = "0.8"
-image = { version = "0.25", default-features = false }
+image = { version = "0.25.1", default-features = false }
 fuzzy-matcher = "0.3"
 nix = { version = "0.28", default_features = false, features = ["process"] }
 css-color = "0.2"

@@ -75,7 +75,7 @@ impl Keybindings {
     }
 
     fn add_key_combos(&mut self, action: &Action, key_combos: &[KeyCombo]) {
-        for entry in key_combos.iter() {
+        for entry in key_combos {
             self.inner.insert(entry.clone(), action.clone());
         }
     }

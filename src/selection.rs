@@ -1,6 +1,6 @@
 use crate::config::History;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use log::*;
+use log::warn;
 use std::fs::File;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
@@ -42,7 +42,7 @@ pub struct ElementList {
 
 impl ElementList {
     pub fn merge_history(&mut self, history: &History) {
-        for entry in history.as_vec().iter() {
+        for entry in history.as_vec() {
             if let Some(elem) = self.inner.iter_mut().find(|x| x.name == entry.name) {
                 elem.base_score = entry.num_used;
             } else {
@@ -176,7 +176,7 @@ impl ElementListBuilder {
         let dirs_iter = paths_iter.filter_map(|path| std::fs::read_dir(path).ok());
 
         for dir in dirs_iter {
-            dir.filter_map(|file| file.ok()).for_each(|file| {
+            dir.filter_map(Result::ok).for_each(|file| {
                 if let Ok(metadata) = file.metadata() {
                     if !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0 {
                         let name = file.file_name().to_str().unwrap().to_string();
@@ -211,7 +211,7 @@ impl ElementListBuilder {
             match kv_pair {
                 ("%base_score", Some(value)) => {
                     if let Ok(value) = value.parse::<usize>() {
-                        base_score = value
+                        base_score = value;
                     }
                 }
                 (key, Some(value)) => res.push(Element {

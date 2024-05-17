@@ -1,7 +1,7 @@
 use crate::color::Color;
 use crate::keybinds::{KeyCombo, Modifiers};
 use crate::selection::Element;
-use log::*;
+use log::info;
 use smithay_client_toolkit::seat::keyboard::{Keysym, Modifiers as ModifiersState};
 use std::fmt::Debug;
 use std::fs::{read_to_string, write};

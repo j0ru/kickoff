@@ -6,7 +6,7 @@ use crate::font::Font;
 use crate::selection::{Element, ElementList};
 use crate::Args;
 use image::{ImageBuffer, RgbaImage};
-use log::*;
+use log::error;
 use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
@@ -172,7 +172,9 @@ impl App {
             Some(prompt) => prompt,
             None => &self.config.prompt,
         };
-        let prompt_width = if !prompt.is_empty() {
+        let prompt_width = if prompt.is_empty() {
+            0
+        } else {
             let (width, _) = self.font.render(
                 prompt,
                 &self.config.colors.prompt,
@@ -182,8 +184,6 @@ impl App {
                 None,
             );
             width + (font_size * 0.2) as u32
-        } else {
-            0
         };
 
         if !self.query.is_empty() {

@@ -1,10 +1,11 @@
 #![warn(clippy::nursery)]
+#![allow(clippy::cast_possible_truncation)]
 
 use anyhow::Result;
 use app::App;
 use clap::Parser;
 use config::{Config, History};
-use log::*;
+use log::{debug, error, warn};
 use std::time::Instant;
 use std::{
     io::{Read, Write},

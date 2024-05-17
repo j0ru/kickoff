@@ -1,6 +1,6 @@
 use crate::{keybinds::Keybindings, App};
 use image::Pixel;
-use log::*;
+use log::{debug, error};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,

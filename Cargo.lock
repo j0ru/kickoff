@@ -1051,7 +1051,6 @@ dependencies = [
  "fontdue",
  "futures",
  "fuzzy-matcher",
- "hex",
  "image",
  "log",
  "nix 0.28.0",

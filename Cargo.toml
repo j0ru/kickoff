@@ -9,6 +9,7 @@ homepage = "https://github.com/j0ru/kickoff"
 repository = "https://github.com/j0ru/kickoff"
 readme = "README.md"
 keywords = ["wayland", "launcher", "wlroots"]
+rust-version = "1.75"
 
 [dependencies]
 smithay-client-toolkit = "0.18"

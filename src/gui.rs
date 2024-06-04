@@ -6,6 +6,10 @@ use smithay_client_toolkit::{
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
     delegate_registry, delegate_seat, delegate_shm,
     output::{OutputHandler, OutputState},
+    reexports::{
+        calloop::{EventLoop, LoopHandle},
+        calloop_wayland_source::WaylandSource,
+    },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
@@ -22,7 +26,10 @@ use smithay_client_toolkit::{
     },
     shm::{slot::SlotPool, Shm, ShmHandler},
 };
-use std::io::{BufWriter, Read, Write};
+use std::{
+    io::{BufWriter, Read, Write},
+    time::Duration,
+};
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
@@ -46,8 +53,14 @@ pub enum Action {
 pub fn run(app: App) {
     let conn = Connection::connect_to_env().unwrap();
 
-    let (globals, mut event_queue) = registry_queue_init(&conn).unwrap();
+    let (globals, event_queue) = registry_queue_init(&conn).unwrap();
     let qh = event_queue.handle();
+    let mut event_loop: EventLoop<GuiLayer> =
+        EventLoop::try_new().expect("Failed to initialize event loop");
+    let loop_handle = event_loop.handle();
+    WaylandSource::new(conn, event_queue)
+        .insert(loop_handle)
+        .unwrap();
 
     let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor is not available");
     let layer_shell = LayerShell::bind(&globals, &qh).expect("layer shell is not available");
@@ -83,10 +96,13 @@ pub fn run(app: App) {
         keybindings: Keybindings::from(app.config.keybindings.clone()),
         app,
         next_action: None,
+        loop_handle: event_loop.handle(),
     };
 
     loop {
-        event_queue.blocking_dispatch(&mut gui_layer).unwrap();
+        event_loop
+            .dispatch(Duration::from_millis(50), &mut gui_layer)
+            .unwrap();
         match &gui_layer.next_action.take() {
             Some(Action::Exit) => gui_layer.exit = true,
             Some(Action::Complete) => gui_layer.app.complete(),
@@ -142,6 +158,7 @@ struct GuiLayer {
     app: App,
     next_action: Option<Action>,
     keybindings: Keybindings,
+    loop_handle: LoopHandle<'static, GuiLayer>,
 }
 
 impl CompositorHandler for GuiLayer {
@@ -253,7 +270,19 @@ impl SeatHandler for GuiLayer {
             debug!("Set keyboard capability");
             let keyboard = self
                 .seat_state
-                .get_keyboard(qh, &seat, None)
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    self.loop_handle.clone(),
+                    Box::new(|state, _wl_kbd, event| {
+                        if let Some(action) = state.keybindings.get(state.modifiers, event.keysym) {
+                            state.next_action = Some(action.clone());
+                        } else if let Some(input) = event.utf8 {
+                            state.next_action = Some(Action::Insert(input));
+                        }
+                    }),
+                )
                 .expect("Failed to create keyboard");
             self.keyboard = Some(keyboard);
         }

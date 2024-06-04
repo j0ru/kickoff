@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{cmp, process};
 
 use crate::config::{Config, History};
@@ -6,7 +6,7 @@ use crate::font::Font;
 use crate::selection::{Element, ElementList};
 use crate::Args;
 use image::{ImageBuffer, RgbaImage};
-use log::error;
+use log::{debug, error};
 use nix::{
     sys::wait::{waitpid, WaitPidFlag, WaitStatus},
     unistd::{fork, ForkResult},
@@ -156,6 +156,7 @@ impl App {
     }
 
     pub fn draw(&mut self, width: u32, height: u32, scale: i32) -> RgbaImage {
+        let frame_draw_start = Instant::now();
         let search_results: Vec<&Element> = self
             .last_search_result
             .iter()
@@ -231,6 +232,9 @@ impl App {
                 Some((width - (padding * 2)) as usize),
             );
         }
+
+        let elapsed = frame_draw_start.elapsed();
+        debug!("frame time: {:.2?}", elapsed);
 
         img
     }

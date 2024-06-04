@@ -58,7 +58,7 @@ pub fn run(app: App) {
     let mut event_loop: EventLoop<GuiLayer> =
         EventLoop::try_new().expect("Failed to initialize event loop");
     let loop_handle = event_loop.handle();
-    WaylandSource::new(conn.clone(), event_queue)
+    WaylandSource::new(conn, event_queue)
         .insert(loop_handle)
         .unwrap();
 

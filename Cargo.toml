@@ -12,7 +12,7 @@ keywords = ["wayland", "launcher", "wlroots"]
 rust-version = "1.75"
 
 [dependencies]
-smithay-client-toolkit = "0.18"
+smithay-client-toolkit = "0.19"
 fontdue = "0.9"
 image = { version = "0.25", default-features = false }
 fuzzy-matcher = "0.3"

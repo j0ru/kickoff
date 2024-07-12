@@ -191,6 +191,25 @@ impl CompositorHandler for GuiLayer {
         _new_transform: wl_output::Transform,
     ) {
     }
+
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
+
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+        self.next_action = Some(Action::Exit);
+    }
 }
 
 impl OutputHandler for GuiLayer {
@@ -376,6 +395,7 @@ impl KeyboardHandler for GuiLayer {
         _: &wl_keyboard::WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
+        _: u32,
     ) {
         debug!("Update modifiers: {modifiers:?}");
         self.modifiers = modifiers;

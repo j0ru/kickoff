@@ -32,6 +32,7 @@ futures = "0.3"
 wayland-client = "0.31"
 anyhow = "1.0"
 wl-clipboard-rs = "0.9"
+x11-keysymdef = "0.2.0"
 
 [dependencies.tokio]
 version = "1.37"
@@ -44,11 +45,6 @@ features = [
   "macros",
   "io-std",
 ]
-default-features = false
-
-[dependencies.x11-keysymdef]
-git = "https://github.com/j0ru/xkb-parser.git"
-features = ["by_name"]
 default-features = false
 
 [profile.release]

@@ -2070,7 +2070,8 @@ dependencies = [
 [[package]]
 name = "x11-keysymdef"
 version = "0.2.0"
-source = "git+https://github.com/j0ru/xkb-parser.git#79fc95888755cdf235d9806076857f72403203cd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbf416b13554005d6a7de7dda272ecdd76207a34c919af69bcf4bccbc971b258"
 dependencies = [
  "lazy_static",
  "serde",

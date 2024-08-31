@@ -203,9 +203,9 @@ impl App {
             );
         }
 
-        let spacer = (1.5 * font_size) as u32;
+        let spacer = self.config.line_height;
         let max_entries = ((height.saturating_sub(2 * padding).saturating_sub(spacer)) as f32
-            / (font_size * 1.2)) as usize;
+            / (spacer as f32)) as usize;
         let offset = if self.select_index > (max_entries / 2) {
             self.select_index - max_entries / 2
         } else {
@@ -228,7 +228,7 @@ impl App {
                 color,
                 &mut img,
                 padding,
-                padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
+                padding + spacer + (i - offset) as u32 * spacer,
                 Some((width - (padding * 2)) as usize),
             );
         }

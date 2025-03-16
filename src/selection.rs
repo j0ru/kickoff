@@ -1,4 +1,4 @@
-use crate::config::History;
+use crate::config::{self, History};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::warn;
 use std::fs::File;
@@ -85,6 +85,7 @@ impl ElementList {
 
 #[derive(Debug, Default)]
 pub struct ElementListBuilder {
+    path_config: config::SearchConfig,
     from_path: bool,
     from_stdin: bool,
     from_file: Vec<PathBuf>,
@@ -95,8 +96,9 @@ impl ElementListBuilder {
         Self::default()
     }
 
-    pub fn add_path(&mut self) {
+    pub fn add_path(&mut self, config: config::SearchConfig) {
         self.from_path = true;
+        self.path_config = config;
     }
     pub fn add_files(&mut self, files: &[PathBuf]) {
         self.from_file = files.to_vec();
@@ -115,7 +117,8 @@ impl ElementListBuilder {
             fut.push(spawn_blocking(move || Self::build_files(&files)));
         }
         if self.from_path {
-            fut.push(spawn_blocking(Self::build_path));
+            let show_hidden = self.path_config.show_hidden_files;
+            fut.push(spawn_blocking(move || Self::build_path(show_hidden)));
         }
 
         let finished = futures::future::join_all(fut).await;
@@ -167,7 +170,7 @@ impl ElementListBuilder {
         Ok(res)
     }
 
-    fn build_path() -> Result<Vec<Element>, std::io::Error> {
+    fn build_path(show_hidden: bool) -> Result<Vec<Element>, std::io::Error> {
         let var = env::var("PATH").unwrap();
 
         let mut res: Vec<Element> = Vec::new();
@@ -177,6 +180,14 @@ impl ElementListBuilder {
 
         for dir in dirs_iter {
             dir.filter_map(Result::ok).for_each(|file| {
+                if !show_hidden
+                    && file
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|name| name.starts_with('.'))
+                {
+                    return;
+                }
                 if let Ok(metadata) = file.metadata() {
                     if !metadata.is_dir() && metadata.permissions().mode() & 0o111 != 0 {
                         let name = file.file_name().to_str().unwrap().to_string();

@@ -144,7 +144,7 @@ async fn run() -> Result<()> {
 
     let mut apps = selection::ElementListBuilder::new();
     if args.from_path || (!args.from_stdin && args.from_file.is_empty()) {
-        apps.add_path();
+        apps.add_path(config.search.clone());
     }
     if !args.from_file.is_empty() {
         apps.add_files(&args.from_file);

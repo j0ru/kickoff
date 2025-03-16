@@ -11,6 +11,9 @@ fonts = [
 ] # list of otf or ttf fonts. later elements work as fallback
 font_size = 32.0
 
+[search]
+show_hidden_files = false
+
 [history]
 decrease_interval = 48 # interval to decrease the number of launches in hours
 

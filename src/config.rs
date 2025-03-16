@@ -40,6 +40,12 @@ pub struct HistoryConfig {
     pub decrease_interval: u64,
 }
 
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct SearchConfig {
+    pub show_hidden_files: bool,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -51,6 +57,7 @@ pub struct Config {
     pub colors: ColorConfig,
     pub history: HistoryConfig,
     pub keybindings: KeybindingsConfig,
+    pub search: SearchConfig,
 }
 
 impl Default for KeybindingsConfig {
@@ -134,6 +141,7 @@ impl Default for Config {
             colors: ColorConfig::default(),
             history: HistoryConfig::default(),
             keybindings: KeybindingsConfig::default(),
+            search: SearchConfig::default(),
         }
     }
 }

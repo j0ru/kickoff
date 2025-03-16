@@ -184,7 +184,7 @@ impl ElementListBuilder {
                     && file
                         .file_name()
                         .to_str()
-                        .is_some_and(|name| name.starts_with("."))
+                        .is_some_and(|name| name.starts_with('.'))
                 {
                     return;
                 }

@@ -98,7 +98,7 @@ impl Font {
     }
 
     pub fn render(
-        &mut self,
+        &self,
         text: &str,
         color: &Color,
         image: &mut RgbaImage,

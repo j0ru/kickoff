@@ -97,7 +97,7 @@ impl<'de> Deserialize<'de> for KeyCombo {
 }
 
 struct KeyComboVisitor;
-impl<'de> Visitor<'de> for KeyComboVisitor {
+impl Visitor<'_> for KeyComboVisitor {
     type Value = KeyCombo;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("assignments of key combinations")

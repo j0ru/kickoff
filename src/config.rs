@@ -155,7 +155,7 @@ impl Default for HistoryConfig {
 
 impl Config {
     pub fn load(config_path: Option<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
-        let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+        let xdg_dirs = BaseDirectories::with_prefix("kickoff");
         if let Some(config_file) = config_path {
             let content = read_to_string(config_file)?;
             Ok(toml::from_str(&content)?)
@@ -186,8 +186,7 @@ pub struct History {
 
 impl Default for History {
     fn default() -> Self {
-        let xdg_dirs = BaseDirectories::with_prefix("kickoff")
-            .expect("Failed to determine xdg base directory");
+        let xdg_dirs = BaseDirectories::with_prefix("kickoff");
         Self {
             entries: Vec::new(),
             path: xdg_dirs
@@ -206,7 +205,7 @@ impl History {
         let history_path = if let Some(path) = path {
             path
         } else {
-            let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+            let xdg_dirs = BaseDirectories::with_prefix("kickoff");
             if let Some(path) = xdg_dirs.find_cache_file("default.csv") {
                 path
             } else {

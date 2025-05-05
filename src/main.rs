@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn put_pid() -> std::io::Result<()> {
-    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff");
     let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
     match fs::File::open(pid_path.clone()) {
         Err(_) => {
@@ -107,7 +107,7 @@ fn put_pid() -> std::io::Result<()> {
 
 #[cfg(target_os = "linux")]
 fn del_pid() -> std::io::Result<()> {
-    let xdg_dirs = BaseDirectories::with_prefix("kickoff")?;
+    let xdg_dirs = BaseDirectories::with_prefix("kickoff");
     let pid_path = xdg_dirs.place_runtime_file("kickoff.pid").unwrap();
     std::fs::remove_file(pid_path)?;
     Ok(())

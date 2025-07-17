@@ -97,6 +97,32 @@ impl Font {
         res
     }
 
+    pub fn measure_text(&self, text: &str) -> (u32, u32) {
+        let mut width = 0;
+        let mut layout = self.layout.borrow_mut();
+        layout.reset(&LayoutSettings::default());
+
+        for c in Self::replace_tabs(text, self.tab_width).chars() {
+            let mut font_index = 0;
+            for (i, font) in self.fonts.iter().enumerate() {
+                if font.lookup_glyph_index(c) != 0 {
+                    font_index = i;
+                    break;
+                }
+            }
+            layout.append(
+                &self.fonts,
+                &TextStyle::new(&c.to_string(), self.size * self.scale as f32, font_index),
+            );
+        }
+
+        if let Some(glyph) = layout.glyphs().last() {
+            width = glyph.x as usize + glyph.width;
+        }
+
+        (width as u32, layout.height() as u32)
+    }
+
     pub fn render(
         &self,
         text: &str,

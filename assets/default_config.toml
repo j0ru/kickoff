@@ -6,6 +6,9 @@ prompt = ''
 # space between window border and the content in pixel
 padding = 100
 
+# horizontal alignment of text content: "left" or "center"
+alignment = "left"
+
 fonts = [
     'Noto Sans Mono',
 ] # list of otf or ttf fonts. later elements work as fallback

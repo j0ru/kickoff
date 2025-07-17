@@ -173,19 +173,42 @@ impl App {
             Some(prompt) => prompt,
             None => &self.config.prompt,
         };
+        
+        // Calculate horizontal and vertical offsets based on alignment mode
+        let (base_x_offset, vertical_padding) = if self.config.alignment == "center" {
+            // For center alignment: 
+            // - Use padding only for vertical spacing (top margin)
+            // - Calculate horizontal offset to center the text block
+            let estimated_text_width = width / 3; // Rough estimate for text block width
+            let horizontal_offset = if width > estimated_text_width {
+                (width - estimated_text_width) / 2
+            } else {
+                width / 4 // Fallback to quarter screen width
+            };
+            (horizontal_offset, padding)
+        } else {
+            // Default to left alignment: use padding for both horizontal and vertical spacing
+            (padding, padding)
+        };
+
         let prompt_width = if prompt.is_empty() {
             0
         } else {
-            let (width, _) = self.font.render(
+            let (pwidth, _) = self.font.measure_text(prompt);
+            pwidth + (font_size * 0.2) as u32
+        };
+
+        // Now render at the consistent position
+        if !prompt.is_empty() {
+            self.font.render(
                 prompt,
                 &self.config.colors.prompt,
                 &mut img,
-                padding,
-                padding,
+                base_x_offset,
+                vertical_padding,
                 None,
             );
-            width + (font_size * 0.2) as u32
-        };
+        }
 
         if !self.query.is_empty() {
             let color = if self.select_input {
@@ -197,14 +220,14 @@ impl App {
                 &self.query,
                 color,
                 &mut img,
-                padding + prompt_width,
-                padding,
+                base_x_offset + prompt_width,
+                vertical_padding,
                 None,
             );
         }
 
         let spacer = (1.5 * font_size) as u32;
-        let max_entries = ((height.saturating_sub(2 * padding).saturating_sub(spacer)) as f32
+        let max_entries = ((height.saturating_sub(2 * vertical_padding).saturating_sub(spacer)) as f32
             / (font_size * 1.2)) as usize;
         let offset = if self.select_index > (max_entries / 2) {
             self.select_index - max_entries / 2
@@ -223,13 +246,15 @@ impl App {
             } else {
                 &self.config.colors.text
             };
+            
+            // Use the same base_x_offset for all search results to keep them aligned
             self.font.render(
                 &matched.name,
                 color,
                 &mut img,
-                padding,
-                padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
-                Some((width - (padding * 2)) as usize),
+                base_x_offset,
+                vertical_padding + spacer + (i - offset) as u32 * (font_size * 1.2) as u32,
+                Some((width - (base_x_offset * 2)) as usize),
             );
         }
 

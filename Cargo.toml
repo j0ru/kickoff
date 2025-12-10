@@ -24,7 +24,7 @@ toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.11"
-fontconfig = "0.9"
+fontconfig = "0.10"
 notify-rust = "4.11"
 clap = { version = "4.5", features = ["derive"] }
 csv = "1.3"

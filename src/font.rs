@@ -1,6 +1,6 @@
 use crate::color::Color;
-use fontdue::layout::{CoordinateSystem, GlyphRasterConfig, Layout, LayoutSettings, TextStyle};
 use fontdue::Metrics;
+use fontdue::layout::{CoordinateSystem, GlyphRasterConfig, Layout, LayoutSettings, TextStyle};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -58,7 +58,7 @@ impl Font {
         })
     }
 
-    pub fn set_scale(&mut self, scale: i32) {
+    pub const fn set_scale(&mut self, scale: i32) {
         self.scale = scale;
     }
 

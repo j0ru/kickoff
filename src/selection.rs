@@ -1,5 +1,5 @@
 use crate::config::{self, History};
-use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use log::warn;
 use std::fs::File;
 use std::{
@@ -96,14 +96,14 @@ impl ElementListBuilder {
         Self::default()
     }
 
-    pub fn add_path(&mut self, config: config::SearchConfig) {
+    pub const fn add_path(&mut self, config: config::SearchConfig) {
         self.from_path = true;
         self.path_config = config;
     }
     pub fn add_files(&mut self, files: &[PathBuf]) {
         self.from_file = files.to_vec();
     }
-    pub fn add_stdin(&mut self) {
+    pub const fn add_stdin(&mut self) {
         self.from_stdin = true;
     }
 

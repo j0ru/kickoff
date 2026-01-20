@@ -8,8 +8,8 @@ use config::{Config, History};
 use log::{debug, error, warn};
 use std::time::Instant;
 use std::{
+    fs,
     io::{Read, Write},
-    {fs, io::ErrorKind},
     {path::PathBuf, process},
 };
 use xdg::BaseDirectories;
@@ -91,10 +91,7 @@ fn put_pid() -> std::io::Result<()> {
             file_handle.read_to_string(&mut pid)?;
             if !pid.is_empty() && fs::metadata(format!("/proc/{pid}")).is_ok() {
                 debug!("Pid from pid file still alive");
-                Err(std::io::Error::new(
-                    ErrorKind::Other,
-                    "Kickoff is already running",
-                ))
+                Err(std::io::Error::other("Kickoff is already running"))
             } else {
                 debug!("Pid from kickoff.pid not alive, overwriting...");
                 let mut pid_file = fs::File::create(pid_path)?;

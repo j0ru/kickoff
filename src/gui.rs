@@ -72,6 +72,7 @@ pub fn run(app: App) {
 
     layer.set_anchor(Anchor::all());
     layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+    layer.set_exclusive_zone(-1);
 
     layer.commit();
 

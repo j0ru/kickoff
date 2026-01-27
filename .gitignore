@@ -5,6 +5,7 @@
 
 # Compilation artifacts
 /target
+/result
 
 # Profiling
 perf.data*

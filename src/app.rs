@@ -1,15 +1,15 @@
 use std::time::{Duration, Instant};
 use std::{cmp, process};
 
+use crate::Args;
 use crate::config::{Config, History};
 use crate::font::Font;
 use crate::selection::{Element, ElementList};
-use crate::Args;
 use image::{ImageBuffer, RgbaImage};
 use log::{debug, error};
 use nix::{
-    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
-    unistd::{fork, ForkResult},
+    sys::wait::{WaitPidFlag, WaitStatus, waitpid},
+    unistd::{ForkResult, fork},
 };
 use notify_rust::Notification;
 
@@ -206,11 +206,7 @@ impl App {
         let spacer = (1.5 * font_size) as u32;
         let max_entries = ((height.saturating_sub(2 * padding).saturating_sub(spacer)) as f32
             / (font_size * 1.2)) as usize;
-        let offset = if self.select_index > (max_entries / 2) {
-            self.select_index - max_entries / 2
-        } else {
-            0
-        };
+        let offset = self.select_index.saturating_sub(max_entries / 2);
 
         for (i, matched) in search_results
             .iter()

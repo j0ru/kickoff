@@ -1,4 +1,4 @@
-use crate::{keybinds::Keybindings, App};
+use crate::{App, keybinds::Keybindings};
 use image::Pixel;
 use log::{debug, error};
 use smithay_client_toolkit::{
@@ -13,29 +13,29 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
+        Capability, SeatHandler, SeatState,
         keyboard::{KeyEvent, KeyboardHandler, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
-        Capability, SeatHandler, SeatState,
     },
     shell::{
+        WaylandSurface,
         wlr_layer::{
             Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
             LayerSurfaceConfigure,
         },
-        WaylandSurface,
     },
-    shm::{slot::SlotPool, Shm, ShmHandler},
+    shm::{Shm, ShmHandler, slot::SlotPool},
 };
 use std::{
     io::{BufWriter, Read, Write},
     time::Duration,
 };
 use wayland_client::{
+    Connection, QueueHandle,
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
-    Connection, QueueHandle,
 };
-use wl_clipboard_rs::paste::{get_contents, ClipboardType, Error, MimeType, Seat};
+use wl_clipboard_rs::paste::{ClipboardType, Error, MimeType, Seat, get_contents};
 
 #[derive(Clone)]
 pub enum Action {
@@ -158,7 +158,7 @@ struct GuiLayer {
     app: App,
     next_action: Option<Action>,
     keybindings: Keybindings,
-    loop_handle: LoopHandle<'static, GuiLayer>,
+    loop_handle: LoopHandle<'static, Self>,
 }
 
 impl CompositorHandler for GuiLayer {

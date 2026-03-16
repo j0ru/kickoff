@@ -1,4 +1,4 @@
-{
+self: {
   config,
   lib,
   pkgs,
@@ -12,7 +12,7 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.kickoff;
+      default = self.packages.${pkgs.system}.default;
       defaultText = lib.literalExpression "pkgs.kickoff";
       description = "The kickoff package to install.";
     };

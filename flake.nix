@@ -9,6 +9,7 @@
   };
 
   outputs = inputs @ {
+    self,
     flake-parts,
     home-manager,
     ...
@@ -40,7 +41,7 @@
       };
 
       flake = {
-        homeModules.default = import ./nix/home-manager.nix;
+        homeModules.default = import ./nix/home-manager.nix self;
       };
     };
 }

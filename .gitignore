@@ -11,3 +11,6 @@ result
 perf.data*
 flame.svg
 flamegraph.svg
+
+# direnv
+.direnv

@@ -20,13 +20,13 @@ nix = { version = "0.31", default-features = false, features = ["process"] }
 css-color = "0.2"
 exec = "0.3"
 xdg = "3.0"
-toml = "0.9"
+toml = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.11"
 fontconfig = "0.10"
-notify-rust = "4.11"
-clap = { version = "4.5", features = ["derive"] }
+notify-rust = "4.16"
+clap = { version = "4.6", features = ["derive"] }
 csv = "1.4"
 futures = "0.3"
 wayland-client = "0.31"
@@ -35,7 +35,7 @@ wl-clipboard-rs = "0.9"
 x11-keysymdef = "0.2"
 
 [dependencies.tokio]
-version = "1.49"
+version = "1.52"
 features = [
     "fs",
     "rt-multi-thread",

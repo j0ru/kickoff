@@ -51,6 +51,7 @@ pub struct SearchConfig {
 pub struct Config {
     pub prompt: String,
     pub padding: u32,
+    pub alignment: String,
     pub font: Option<String>,
     pub fonts: Vec<String>,
     pub font_size: f32,
@@ -135,6 +136,7 @@ impl Default for Config {
         Self {
             prompt: String::new(),
             padding: 100,
+            alignment: "left".to_string(),
             font: None,
             fonts: vec![],
             font_size: 32.,
